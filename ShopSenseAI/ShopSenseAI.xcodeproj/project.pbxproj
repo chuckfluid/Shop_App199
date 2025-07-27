@@ -20,7 +20,7 @@
 		971CBF462E36323900871644 /* ClaudeAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF452E36323800871644 /* ClaudeAPIService.swift */; };
 		971CBF482E36324D00871644 /* PriceTrackingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF472E36324B00871644 /* PriceTrackingService.swift */; };
 		971CBF4B2E36326400871644 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF4A2E36326200871644 /* NotificationService.swift */; };
-		97ECC4BA2E36567800766189 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 97ECC4B92E36567800766189 /* Info.plist */; };
+		97ECC4C82E365B1900766189 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 97ECC4C72E365B1900766189 /* Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,7 +57,7 @@
 		971CBF452E36323800871644 /* ClaudeAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeAPIService.swift; sourceTree = "<group>"; };
 		971CBF472E36324B00871644 /* PriceTrackingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceTrackingService.swift; sourceTree = "<group>"; };
 		971CBF4A2E36326200871644 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
-		97ECC4B92E36567800766189 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		97ECC4C72E365B1900766189 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -129,7 +129,7 @@
 		971CBF262E362E5A00871644 /* ShopSenseAI */ = {
 			isa = PBXGroup;
 			children = (
-				97ECC4B92E36567800766189 /* Info.plist */,
+				97ECC4C72E365B1900766189 /* Info.plist */,
 				971CBF232E362E5A00871644 /* Assets.xcassets */,
 				971CBF2B2E362E6300871644 /* App */,
 				971CBF2D2E36304F00871644 /* Models */,
@@ -330,7 +330,7 @@
 			files = (
 				971CBF292E362E5A00871644 /* Preview Assets.xcassets in Resources */,
 				971CBF2A2E362E5A00871644 /* Assets.xcassets in Resources */,
-				97ECC4BA2E36567800766189 /* Info.plist in Resources */,
+				97ECC4C82E365B1900766189 /* Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -529,7 +529,7 @@
 				DEVELOPMENT_TEAM = H53WEUDJ77;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = ShopSenseAI/ShopSenseAI/Info.plist;
+				INFOPLIST_FILE = /Users/chasefloied/Desktop/ShopSenseAI/ShopSenseAI;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -558,7 +558,7 @@
 				DEVELOPMENT_TEAM = H53WEUDJ77;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = ShopSenseAI/ShopSenseAI/Info.plist;
+				INFOPLIST_FILE = /Users/chasefloied/Desktop/ShopSenseAI/ShopSenseAI;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
