@@ -6,6 +6,23 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		971CBF272E362E5A00871644 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF242E362E5A00871644 /* ContentView.swift */; };
+		971CBF292E362E5A00871644 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 971CBF212E362E5A00871644 /* Preview Assets.xcassets */; };
+		971CBF2A2E362E5A00871644 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 971CBF232E362E5A00871644 /* Assets.xcassets */; };
+		971CBF352E3630EF00871644 /* ShopSenseAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF342E3630E800871644 /* ShopSenseAIApp.swift */; };
+		971CBF372E36311400871644 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF362E36311100871644 /* Models.swift */; };
+		971CBF392E36312600871644 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF382E36312500871644 /* MainTabView.swift */; };
+		971CBF3B2E36319500871644 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF3A2E36319200871644 /* OnboardingView.swift */; };
+		971CBF3D2E3631A100871644 /* ShoppingListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF3C2E3631A000871644 /* ShoppingListView.swift */; };
+		971CBF3F2E3631AC00871644 /* DealsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF3E2E3631AB00871644 /* DealsView.swift */; };
+		971CBF422E36321E00871644 /* InventoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF412E36321900871644 /* InventoryView.swift */; };
+		971CBF442E36322A00871644 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF432E36322900871644 /* ProfileView.swift */; };
+		971CBF462E36323900871644 /* ClaudeAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF452E36323800871644 /* ClaudeAPIService.swift */; };
+		971CBF482E36324D00871644 /* PriceTrackingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF472E36324B00871644 /* PriceTrackingService.swift */; };
+		971CBF4B2E36326400871644 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF4A2E36326200871644 /* NotificationService.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		971CBF052E362E0400871644 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,14 +44,24 @@
 		971CBEF42E362E0100871644 /* ShopSenseAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ShopSenseAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		971CBF042E362E0400871644 /* ShopSenseAITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ShopSenseAITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		971CBF0E2E362E0400871644 /* ShopSenseAIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ShopSenseAIUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		971CBF212E362E5A00871644 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		971CBF232E362E5A00871644 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		971CBF242E362E5A00871644 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		971CBF342E3630E800871644 /* ShopSenseAIApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopSenseAIApp.swift; sourceTree = "<group>"; };
+		971CBF362E36311100871644 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		971CBF382E36312500871644 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		971CBF3A2E36319200871644 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		971CBF3C2E3631A000871644 /* ShoppingListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingListView.swift; sourceTree = "<group>"; };
+		971CBF3E2E3631AB00871644 /* DealsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DealsView.swift; sourceTree = "<group>"; };
+		971CBF412E36321900871644 /* InventoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InventoryView.swift; sourceTree = "<group>"; };
+		971CBF432E36322900871644 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		971CBF452E36323800871644 /* ClaudeAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeAPIService.swift; sourceTree = "<group>"; };
+		971CBF472E36324B00871644 /* PriceTrackingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceTrackingService.swift; sourceTree = "<group>"; };
+		971CBF4A2E36326200871644 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		971CBF552E3636BF00871644 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		971CBEF62E362E0100871644 /* ShopSenseAI */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = ShopSenseAI;
-			sourceTree = "<group>";
-		};
 		971CBF072E362E0400871644 /* ShopSenseAITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ShopSenseAITests;
@@ -75,7 +102,7 @@
 		971CBEEB2E362E0100871644 = {
 			isa = PBXGroup;
 			children = (
-				971CBEF62E362E0100871644 /* ShopSenseAI */,
+				971CBF262E362E5A00871644 /* ShopSenseAI */,
 				971CBF072E362E0400871644 /* ShopSenseAITests */,
 				971CBF112E362E0400871644 /* ShopSenseAIUITests */,
 				971CBEF52E362E0100871644 /* Products */,
@@ -92,6 +119,100 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		971CBF222E362E5A00871644 /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				971CBF212E362E5A00871644 /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		971CBF262E362E5A00871644 /* ShopSenseAI */ = {
+			isa = PBXGroup;
+			children = (
+				971CBF552E3636BF00871644 /* Info.plist */,
+				971CBF242E362E5A00871644 /* ContentView.swift */,
+				971CBF232E362E5A00871644 /* Assets.xcassets */,
+				971CBF2B2E362E6300871644 /* App */,
+				971CBF2D2E36304F00871644 /* Models */,
+				971CBF222E362E5A00871644 /* Preview Content */,
+				971CBF332E3630A200871644 /* Services */,
+				971CBF2E2E36305400871644 /* Views */,
+			);
+			path = ShopSenseAI;
+			sourceTree = "<group>";
+		};
+		971CBF2B2E362E6300871644 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				971CBF342E3630E800871644 /* ShopSenseAIApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		971CBF2D2E36304F00871644 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				971CBF362E36311100871644 /* Models.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		971CBF2E2E36305400871644 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				971CBF322E36309000871644 /* Components */,
+				971CBF312E36308B00871644 /* Shopping */,
+				971CBF302E36307100871644 /* Onboarding */,
+				971CBF2F2E36306B00871644 /* Main */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		971CBF2F2E36306B00871644 /* Main */ = {
+			isa = PBXGroup;
+			children = (
+				971CBF382E36312500871644 /* MainTabView.swift */,
+			);
+			path = Main;
+			sourceTree = "<group>";
+		};
+		971CBF302E36307100871644 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				971CBF3A2E36319200871644 /* OnboardingView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		971CBF312E36308B00871644 /* Shopping */ = {
+			isa = PBXGroup;
+			children = (
+				971CBF3E2E3631AB00871644 /* DealsView.swift */,
+				971CBF3C2E3631A000871644 /* ShoppingListView.swift */,
+			);
+			path = Shopping;
+			sourceTree = "<group>";
+		};
+		971CBF322E36309000871644 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				971CBF432E36322900871644 /* ProfileView.swift */,
+				971CBF412E36321900871644 /* InventoryView.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		971CBF332E3630A200871644 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				971CBF4A2E36326200871644 /* NotificationService.swift */,
+				971CBF472E36324B00871644 /* PriceTrackingService.swift */,
+				971CBF452E36323800871644 /* ClaudeAPIService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -106,9 +227,6 @@
 			buildRules = (
 			);
 			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				971CBEF62E362E0100871644 /* ShopSenseAI */,
 			);
 			name = ShopSenseAI;
 			packageProductDependencies = (
@@ -212,6 +330,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				971CBF292E362E5A00871644 /* Preview Assets.xcassets in Resources */,
+				971CBF2A2E362E5A00871644 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -236,6 +356,18 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				971CBF482E36324D00871644 /* PriceTrackingService.swift in Sources */,
+				971CBF272E362E5A00871644 /* ContentView.swift in Sources */,
+				971CBF4B2E36326400871644 /* NotificationService.swift in Sources */,
+				971CBF3D2E3631A100871644 /* ShoppingListView.swift in Sources */,
+				971CBF442E36322A00871644 /* ProfileView.swift in Sources */,
+				971CBF462E36323900871644 /* ClaudeAPIService.swift in Sources */,
+				971CBF422E36321E00871644 /* InventoryView.swift in Sources */,
+				971CBF352E3630EF00871644 /* ShopSenseAIApp.swift in Sources */,
+				971CBF3B2E36319500871644 /* OnboardingView.swift in Sources */,
+				971CBF372E36311400871644 /* Models.swift in Sources */,
+				971CBF3F2E3631AC00871644 /* DealsView.swift in Sources */,
+				971CBF392E36312600871644 /* MainTabView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -399,6 +531,7 @@
 				DEVELOPMENT_TEAM = H53WEUDJ77;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShopSenseAI/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -428,6 +561,7 @@
 				DEVELOPMENT_TEAM = H53WEUDJ77;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShopSenseAI/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
