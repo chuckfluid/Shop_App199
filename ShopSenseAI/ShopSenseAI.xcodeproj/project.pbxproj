@@ -527,7 +527,9 @@
 				DEVELOPMENT_TEAM = H53WEUDJ77;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = /Users/chasefloied/Desktop/ShopSenseAI/ShopSenseAI;
+				INFOPLIST_FILE = /Users/chasefloied/Desktop/ShopSenseAI/ShopSenseAI/ShopSenseAI;
+				INFOPLIST_KEY_CFBundleDisplayName = ShopSenseAI;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -556,7 +558,9 @@
 				DEVELOPMENT_TEAM = H53WEUDJ77;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = /Users/chasefloied/Desktop/ShopSenseAI/ShopSenseAI;
+				INFOPLIST_FILE = /Users/chasefloied/Desktop/ShopSenseAI/ShopSenseAI/ShopSenseAI;
+				INFOPLIST_KEY_CFBundleDisplayName = ShopSenseAI;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
