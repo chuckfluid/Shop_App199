@@ -45,6 +45,16 @@ class PriceTrackingService: ObservableObject {
         }
     }
     
+    func markAlertAsRead(_ alertId: UUID) {
+        if let index = priceAlerts.firstIndex(where: { $0.id == alertId }) {
+            priceAlerts[index].isRead = true
+        }
+    }
+    
+    func clearReadAlerts() {
+        priceAlerts.removeAll { $0.isRead }
+    }
+    
     // MARK: - Private Methods
     private func startPriceMonitoring() {
         // Set up periodic price checking
@@ -80,8 +90,14 @@ class PriceTrackingService: ObservableObject {
             
             // Update product with new prices
             if let index = trackingItems.firstIndex(where: { $0.product.id == product.id }) {
-                trackingItems[index].product.currentLowestPrice = mockPrices.min(by: { $0.totalPrice < $1.totalPrice })
+                let lowestPrice = mockPrices.min(by: { $0.totalPrice < $1.totalPrice })
+                trackingItems[index].product.currentLowestPrice = lowestPrice
+                trackingItems[index].product.priceHistory.append(contentsOf: mockPrices)
                 trackingItems[index].lastChecked = Date()
+                
+                // Calculate average price
+                let allPrices = trackingItems[index].product.priceHistory.map { $0.price }
+                trackingItems[index].product.averagePrice = allPrices.reduce(0, +) / Double(allPrices.count)
                 
                 // Check for price alerts
                 checkForPriceAlerts(item: trackingItems[index], prices: mockPrices)
@@ -98,12 +114,12 @@ class PriceTrackingService: ObservableObject {
                 type: .targetPriceMet,
                 product: item.product,
                 price: lowestPrice,
-                message: "Target price met! \(item.product.name) is now $\(lowestPrice.totalPrice)"
+                message: "Target price met! \(item.product.name) is now $\(String(format: "%.2f", lowestPrice.totalPrice))"
             )
         }
         
         // Check for significant price drops
-        if let previousPrice = item.product.priceHistory.last {
+        if let previousPrice = item.product.priceHistory.dropLast().last {
             let priceDrop = previousPrice.price - lowestPrice.price
             let dropPercentage = (priceDrop / previousPrice.price) * 100
             
@@ -116,11 +132,24 @@ class PriceTrackingService: ObservableObject {
                 )
             }
         }
+        
+        // Check for back in stock
+        if !lowestPrice.inStock {
+            // Check if any previous price point was out of stock
+            let wasOutOfStock = item.product.priceHistory.contains { !$0.inStock }
+            if wasOutOfStock && lowestPrice.inStock {
+                createPriceAlert(
+                    type: .backInStock,
+                    product: item.product,
+                    price: lowestPrice,
+                    message: "\(item.product.name) is back in stock at \(lowestPrice.retailer.name)!"
+                )
+            }
+        }
     }
     
-    private func createPriceAlert(type: PriceAlertType, product: Product, price: PricePoint, message: String) {
+    private func createPriceAlert(type: PriceAlert.PriceAlertType, product: Product, price: PricePoint, message: String) {
         let alert = PriceAlert(
-            id: UUID(),
             type: type,
             product: product,
             price: price,
@@ -134,32 +163,10 @@ class PriceTrackingService: ObservableObject {
         // Send notification
         NotificationService.shared.sendPriceAlert(alert)
     }
-}
-
-// MARK: - Supporting Models
-struct TrackingItem {
-    var product: Product
-    var targetPrice: Double?
-    let startDate: Date
-    var lastChecked: Date?
-    var isActive: Bool
-}
-
-struct PriceAlert: Identifiable {
-    let id: UUID
-    let type: PriceAlertType
-    let product: Product
-    let price: PricePoint
-    let message: String
-    let timestamp: Date
-    var isRead: Bool
-}
-
-enum PriceAlertType {
-    case targetPriceMet
-    case significantDrop
-    case backInStock
-    case flashSale
+    
+    deinit {
+        priceCheckTimer?.invalidate()
+    }
 }
 
 // MARK: - Price Fetching Protocols
@@ -172,21 +179,62 @@ class AmazonPriceProvider: PriceProvider {
     func fetchPrice(for product: Product) async throws -> PricePoint? {
         // Implementation for Amazon price fetching
         // This would use web scraping or Amazon's API if available
-        return nil
+        
+        // Simulate network delay
+        try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        
+        guard let amazonRetailer = Retailer.allRetailers.first(where: { $0.id == "amazon" }) else {
+            return nil
+        }
+        
+        return PricePoint(
+            retailer: amazonRetailer,
+            price: Double.random(in: 50...200),
+            timestamp: Date(),
+            url: "\(amazonRetailer.websiteURL)/dp/\(product.id)",
+            inStock: Bool.random(),
+            shippingCost: Bool.random() ? nil : Double.random(in: 5...15)
+        )
     }
 }
 
 class TargetPriceProvider: PriceProvider {
     func fetchPrice(for product: Product) async throws -> PricePoint? {
         // Implementation for Target price fetching
-        return nil
+        try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        
+        guard let targetRetailer = Retailer.allRetailers.first(where: { $0.id == "target" }) else {
+            return nil
+        }
+        
+        return PricePoint(
+            retailer: targetRetailer,
+            price: Double.random(in: 50...200),
+            timestamp: Date(),
+            url: "\(targetRetailer.websiteURL)/p/\(product.id)",
+            inStock: Bool.random(),
+            shippingCost: Bool.random() ? nil : Double.random(in: 5...15)
+        )
     }
 }
 
 class WalmartPriceProvider: PriceProvider {
     func fetchPrice(for product: Product) async throws -> PricePoint? {
         // Implementation for Walmart price fetching
-        return nil
+        try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        
+        guard let walmartRetailer = Retailer.allRetailers.first(where: { $0.id == "walmart" }) else {
+            return nil
+        }
+        
+        return PricePoint(
+            retailer: walmartRetailer,
+            price: Double.random(in: 50...200),
+            timestamp: Date(),
+            url: "\(walmartRetailer.websiteURL)/ip/\(product.id)",
+            inStock: Bool.random(),
+            shippingCost: Bool.random() ? nil : Double.random(in: 5...15)
+        )
     }
 }
 
@@ -216,5 +264,10 @@ class PriceAggregator {
         }
         
         return prices
+    }
+    
+    func fetchPrice(from retailerId: String, for product: Product) async -> PricePoint? {
+        guard let provider = providers[retailerId] else { return nil }
+        return try? await provider.fetchPrice(for: product)
     }
 }

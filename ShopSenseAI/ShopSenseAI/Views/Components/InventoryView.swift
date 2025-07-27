@@ -102,6 +102,10 @@ struct InventoryView: View {
                         Button(action: { viewModel.analyzeConsumption() }) {
                             Label("Analyze Consumption", systemImage: "chart.line.uptrend.xyaxis")
                         }
+                        
+                        Button(action: { viewModel.generateShoppingList() }) {
+                            Label("Generate Shopping List", systemImage: "list.bullet.clipboard")
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .foregroundColor(.blue)
@@ -123,6 +127,9 @@ struct InventoryView: View {
         case .beauty: return "sparkles"
         case .sports: return "sportscourt"
         case .toys: return "teddybear"
+        case .food: return "fork.knife"
+        case .health: return "heart"
+        case .books: return "book"
         case .other: return "square.grid.2x2"
         }
     }
@@ -308,7 +315,7 @@ struct InventoryItemRow: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     
-                    Button(action: { viewModel.updateQuantity(for: item, change: 1) }) {
+                    Button(action: { viewModel.updateQuantity(for: item, change: item.preferredQuantity - item.currentQuantity) }) {
                         Label("Mark Restocked", systemImage: "checkmark.circle")
                             .font(.caption)
                     }
@@ -351,6 +358,7 @@ struct AddInventoryItemView: View {
     @State private var preferredQuantity = 5
     @State private var reorderThreshold = 2
     @State private var enableAutoReorder = false
+    @State private var estimatedConsumptionDays = 30
     
     var body: some View {
         NavigationView {
@@ -369,6 +377,14 @@ struct AddInventoryItemView: View {
                     Stepper("Current Quantity: \(currentQuantity)", value: $currentQuantity, in: 0...99)
                     Stepper("Preferred Quantity: \(preferredQuantity)", value: $preferredQuantity, in: 1...99)
                     Stepper("Reorder at: \(reorderThreshold) or less", value: $reorderThreshold, in: 0...preferredQuantity-1)
+                }
+                
+                Section("Consumption Tracking") {
+                    Stepper("Estimated consumption: \(estimatedConsumptionDays) days", value: $estimatedConsumptionDays, in: 1...365)
+                    
+                    Text("This helps predict when you'll need to reorder")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
                 
                 Section("Auto-Reorder") {
@@ -396,7 +412,8 @@ struct AddInventoryItemView: View {
                             currentQuantity: currentQuantity,
                             preferredQuantity: preferredQuantity,
                             reorderThreshold: reorderThreshold,
-                            autoReorder: enableAutoReorder
+                            autoReorder: enableAutoReorder,
+                            averageConsumptionDays: estimatedConsumptionDays
                         )
                         dismiss()
                     }
@@ -467,7 +484,7 @@ struct InventoryDetailView: View {
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(quantityColor)
                                     .frame(
-                                        width: geometry.size.width * (Double(currentQuantity) / Double(item.preferredQuantity)),
+                                        width: min(geometry.size.width, geometry.size.width * (Double(currentQuantity) / Double(item.preferredQuantity))),
                                         height: 12
                                     )
                             }
@@ -511,6 +528,20 @@ struct InventoryDetailView: View {
                                 color: .green
                             )
                         }
+                        
+                        InfoCard(
+                            title: "Category",
+                            value: item.product.category.rawValue,
+                            icon: categoryIcon(for: item.product.category),
+                            color: .indigo
+                        )
+                        
+                        InfoCard(
+                            title: "Auto-Reorder",
+                            value: item.autoReorder ? "Enabled" : "Disabled",
+                            icon: item.autoReorder ? "checkmark.circle.fill" : "xmark.circle",
+                            color: item.autoReorder ? .green : .red
+                        )
                     }
                     
                     // Purchase History
@@ -546,6 +577,31 @@ struct InventoryDetailView: View {
                             }
                         }
                     }
+                    
+                    // Quick Actions
+                    VStack(spacing: 12) {
+                        Text("Quick Actions")
+                            .font(.headline)
+                        
+                        HStack(spacing: 12) {
+                            Button(action: {
+                                viewModel.reorderItem(item)
+                            }) {
+                                Label("Add to Shopping List", systemImage: "cart.badge.plus")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            
+                            Button(action: {
+                                currentQuantity = item.preferredQuantity
+                                viewModel.updateQuantity(for: item, newQuantity: currentQuantity)
+                            }) {
+                                Label("Mark Full", systemImage: "checkmark.circle")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
                 }
                 .padding()
             }
@@ -557,6 +613,17 @@ struct InventoryDetailView: View {
                         Button(action: { showingEditSheet = true }) {
                             Label("Edit Item", systemImage: "pencil")
                         }
+                        
+                        Button(action: {
+                            viewModel.toggleAutoReorder(for: item, enabled: !item.autoReorder)
+                        }) {
+                            Label(
+                                item.autoReorder ? "Disable Auto-Reorder" : "Enable Auto-Reorder",
+                                systemImage: item.autoReorder ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath.circle"
+                            )
+                        }
+                        
+                        Divider()
                         
                         Button(role: .destructive, action: {
                             viewModel.deleteItem(item)
@@ -574,6 +641,9 @@ struct InventoryDetailView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingEditSheet) {
+            EditInventoryItemView(item: item, viewModel: viewModel)
+        }
     }
     
     private var quantityColor: Color {
@@ -584,6 +654,82 @@ struct InventoryDetailView: View {
             return .orange
         } else {
             return .green
+        }
+    }
+    
+    private func categoryIcon(for category: Product.ProductCategory) -> String {
+        switch category {
+        case .electronics: return "tv"
+        case .groceries: return "cart"
+        case .clothing: return "tshirt"
+        case .home: return "house"
+        case .beauty: return "sparkles"
+        case .sports: return "sportscourt"
+        case .toys: return "teddybear"
+        case .food: return "fork.knife"
+        case .health: return "heart"
+        case .books: return "book"
+        case .other: return "square.grid.2x2"
+        }
+    }
+}
+
+// MARK: - Edit Inventory Item View
+struct EditInventoryItemView: View {
+    let item: InventoryItem
+    @ObservedObject var viewModel: InventoryViewModel
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var preferredQuantity: Int
+    @State private var reorderThreshold: Int
+    @State private var autoReorder: Bool
+    @State private var averageConsumptionDays: Int
+    
+    init(item: InventoryItem, viewModel: InventoryViewModel) {
+        self.item = item
+        self.viewModel = viewModel
+        self._preferredQuantity = State(initialValue: item.preferredQuantity)
+        self._reorderThreshold = State(initialValue: item.reorderThreshold)
+        self._autoReorder = State(initialValue: item.autoReorder)
+        self._averageConsumptionDays = State(initialValue: item.averageConsumptionDays ?? 30)
+    }
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Item Settings") {
+                    Stepper("Preferred Quantity: \(preferredQuantity)", value: $preferredQuantity, in: 1...99)
+                    Stepper("Reorder at: \(reorderThreshold) or less", value: $reorderThreshold, in: 0...preferredQuantity-1)
+                }
+                
+                Section("Consumption Tracking") {
+                    Stepper("Average consumption: \(averageConsumptionDays) days", value: $averageConsumptionDays, in: 1...365)
+                }
+                
+                Section("Auto-Reorder") {
+                    Toggle("Enable Auto-Reorder", isOn: $autoReorder)
+                }
+            }
+            .navigationTitle("Edit Item")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        viewModel.updateItem(
+                            item,
+                            preferredQuantity: preferredQuantity,
+                            reorderThreshold: reorderThreshold,
+                            autoReorder: autoReorder,
+                            averageConsumptionDays: averageConsumptionDays
+                        )
+                        dismiss()
+                    }
+                }
+            }
         }
     }
 }
@@ -660,6 +806,10 @@ class InventoryViewModel: ObservableObject {
         inventory.filter { $0.needsReorder }
     }
     
+    init() {
+        loadSampleData()
+    }
+    
     func itemCount(for category: Product.ProductCategory) -> Int {
         inventory.filter { $0.product.category == category }.count
     }
@@ -671,7 +821,8 @@ class InventoryViewModel: ObservableObject {
     
     func addItem(name: String, category: Product.ProductCategory,
                  currentQuantity: Int, preferredQuantity: Int,
-                 reorderThreshold: Int, autoReorder: Bool) {
+                 reorderThreshold: Int, autoReorder: Bool,
+                 averageConsumptionDays: Int? = nil) {
         let product = Product(
             name: name,
             description: "",
@@ -686,7 +837,7 @@ class InventoryViewModel: ObservableObject {
             currentQuantity: currentQuantity,
             preferredQuantity: preferredQuantity,
             lastPurchaseDate: nil,
-            averageConsumptionDays: nil,
+            averageConsumptionDays: averageConsumptionDays,
             autoReorder: autoReorder,
             reorderThreshold: reorderThreshold
         )
@@ -696,13 +847,22 @@ class InventoryViewModel: ObservableObject {
     
     func updateQuantity(for item: InventoryItem, newQuantity: Int) {
         if let index = inventory.firstIndex(where: { $0.id == item.id }) {
-            inventory[index].currentQuantity = newQuantity
+            inventory[index].currentQuantity = max(0, newQuantity)
         }
     }
     
     func updateQuantity(for item: InventoryItem, change: Int) {
         if let index = inventory.firstIndex(where: { $0.id == item.id }) {
-            inventory[index].currentQuantity += change
+            inventory[index].currentQuantity = max(0, inventory[index].currentQuantity + change)
+        }
+    }
+    
+    func updateItem(_ item: InventoryItem, preferredQuantity: Int, reorderThreshold: Int, autoReorder: Bool, averageConsumptionDays: Int) {
+        if let index = inventory.firstIndex(where: { $0.id == item.id }) {
+            inventory[index].preferredQuantity = preferredQuantity
+            inventory[index].reorderThreshold = reorderThreshold
+            inventory[index].autoReorder = autoReorder
+            inventory[index].averageConsumptionDays = averageConsumptionDays
         }
     }
     
@@ -723,6 +883,13 @@ class InventoryViewModel: ObservableObject {
     func reorderItem(_ item: InventoryItem) {
         // Add to shopping list
         print("Adding \(item.product.name) to shopping list")
+        // In production, this would integrate with ShoppingListViewModel
+    }
+    
+    func generateShoppingList() {
+        let itemsToReorder = needsReorderItems
+        print("Generating shopping list for \(itemsToReorder.count) items")
+        // In production, this would create a new shopping list with all low-stock items
     }
     
     func deleteItem(_ item: InventoryItem) {
@@ -735,10 +902,29 @@ class InventoryViewModel: ObservableObject {
     
     func analyzeConsumption() {
         // Call Claude API to analyze consumption patterns
+        print("Analyzing consumption patterns...")
+        // In production, this would use ClaudeAPIService
     }
     
     func getPurchaseHistory(for item: InventoryItem) -> [Purchase] {
         // Mock data - in production, fetch from database
-        return []
+        let mockRetailer = Retailer.allRetailers.first!
+        return [
+            Purchase(
+                product: item.product,
+                retailer: mockRetailer,
+                purchaseDate: Date().addingTimeInterval(-30 * 86400),
+                price: 15.99,
+                quantity: 2,
+                totalAmount: 31.98
+            )
+        ]
+    }
+    
+    private func loadSampleData() {
+        // Load some sample inventory items for demonstration
+        addItem(name: "Laundry Detergent", category: .home, currentQuantity: 1, preferredQuantity: 3, reorderThreshold: 1, autoReorder: true, averageConsumptionDays: 21)
+        addItem(name: "Shampoo", category: .beauty, currentQuantity: 0, preferredQuantity: 2, reorderThreshold: 1, autoReorder: true, averageConsumptionDays: 45)
+        addItem(name: "Coffee", category: .food, currentQuantity: 2, preferredQuantity: 4, reorderThreshold: 1, autoReorder: true, averageConsumptionDays: 14)
     }
 }

@@ -1,8 +1,129 @@
 import SwiftUI
+import MessageUI
+
+// MARK: - Authentication Manager
+class AuthenticationManager: ObservableObject {
+    @Published var isSignedIn = false
+    @Published var subscriptionTier: SubscriptionTier = .free
+    @Published var userProfile: UserProfile?
+    
+    enum SubscriptionTier: String, CaseIterable {
+        case free = "Free"
+        case premium = "Premium"
+        
+        var displayName: String {
+            return self.rawValue
+        }
+    }
+    
+    struct UserProfile {
+        let id: String
+        let name: String
+        let email: String
+        let memberSince: Date
+    }
+    
+    static let shared = AuthenticationManager()
+    
+    private init() {
+        // Initialize with mock data for development
+        loadUserData()
+    }
+    
+    func signIn(email: String, password: String) async throws {
+        // Mock sign in - replace with actual authentication
+        try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
+        
+        await MainActor.run {
+            self.isSignedIn = true
+            self.userProfile = UserProfile(
+                id: UUID().uuidString,
+                name: "John Doe",
+                email: email,
+                memberSince: Date().addingTimeInterval(-365 * 86400)
+            )
+        }
+    }
+    
+    func signOut() {
+        isSignedIn = false
+        userProfile = nil
+        subscriptionTier = .free
+    }
+    
+    func upgradeToPremium() {
+        subscriptionTier = .premium
+    }
+    
+    private func loadUserData() {
+        // Mock user data for development
+        userProfile = UserProfile(
+            id: "mock_user_id",
+            name: "John Doe",
+            email: "john.doe@example.com",
+            memberSince: Date().addingTimeInterval(-365 * 86400)
+        )
+        isSignedIn = true
+    }
+}
+
+// MARK: - Updated User Preferences (ObservableObject)
+class UserPreferencesManager: ObservableObject {
+    @Published var priceDropThreshold: Double = 10.0 // Percentage
+    @Published var preferredRetailers: Set<String> = ["amazon", "target", "walmart"]
+    @Published var budgetAlertThreshold: Double = 0.8 // 80% of budget
+    @Published var notificationsEnabled: Bool = true
+    @Published var autoReorderEnabled: Bool = false
+    @Published var priceCheckFrequency: TimeInterval = 3600 // 1 hour in seconds
+    @Published var dealCategories: [Product.ProductCategory] = Product.ProductCategory.allCases
+    
+    // Additional UI preferences
+    @Published var dailyDigestEnabled: Bool = true
+    @Published var priceDropAlertsEnabled: Bool = true
+    @Published var inventoryAlertsEnabled: Bool = true
+    @Published var dealExpiringAlertsEnabled: Bool = true
+    @Published var digestTime: Date = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
+    
+    static let shared = UserPreferencesManager()
+    
+    private init() {
+        loadPreferences()
+    }
+    
+    func savePreferences() {
+        // In production, save to UserDefaults or backend
+        let encoder = JSONEncoder()
+        if let encoded = try? encoder.encode(ClaudeUserPreferences(
+            priceDropThreshold: priceDropThreshold,
+            preferredRetailers: preferredRetailers,
+            budgetAlertThreshold: budgetAlertThreshold,
+            notificationsEnabled: notificationsEnabled,
+            autoReorderEnabled: autoReorderEnabled,
+            priceCheckFrequency: priceCheckFrequency,
+            dealCategories: dealCategories
+        )) {
+            UserDefaults.standard.set(encoded, forKey: "UserPreferences")
+        }
+    }
+    
+    private func loadPreferences() {
+        // In production, load from UserDefaults or backend
+        if let data = UserDefaults.standard.data(forKey: "UserPreferences"),
+           let preferences = try? JSONDecoder().decode(ClaudeUserPreferences.self, from: data) {
+            self.priceDropThreshold = preferences.priceDropThreshold
+            self.preferredRetailers = preferences.preferredRetailers
+            self.budgetAlertThreshold = preferences.budgetAlertThreshold
+            self.notificationsEnabled = preferences.notificationsEnabled
+            self.autoReorderEnabled = preferences.autoReorderEnabled
+            self.priceCheckFrequency = preferences.priceCheckFrequency
+            self.dealCategories = preferences.dealCategories
+        }
+    }
+}
 
 struct ProfileView: View {
     @EnvironmentObject var authManager: AuthenticationManager
-    @EnvironmentObject var userPreferences: UserPreferences
+    @EnvironmentObject var userPreferences: UserPreferencesManager
     @StateObject private var viewModel = ProfileViewModel()
     @State private var showingSubscriptionDetails = false
     
@@ -55,11 +176,11 @@ struct ProfileView: View {
                 
                 // Preferences
                 Section("Preferences") {
-                    NavigationLink(destination: NotificationSettingsView()) {
+                    NavigationLink(destination: NotificationSettingsView().environmentObject(userPreferences)) {
                         Label("Notifications", systemImage: "bell")
                     }
                     
-                    NavigationLink(destination: RetailerPreferencesView()) {
+                    NavigationLink(destination: RetailerPreferencesView().environmentObject(userPreferences)) {
                         Label("Preferred Retailers", systemImage: "building.2")
                     }
                     
@@ -101,7 +222,7 @@ struct ProfileView: View {
             }
             .navigationTitle("Profile")
             .sheet(isPresented: $showingSubscriptionDetails) {
-                SubscriptionDetailsView()
+                SubscriptionDetailsView().environmentObject(authManager)
             }
         }
     }
@@ -220,12 +341,7 @@ struct SavingsSummaryRow: View {
 
 // MARK: - Notification Settings View
 struct NotificationSettingsView: View {
-    @EnvironmentObject var userPreferences: UserPreferences
-    @State private var dailyDigest = true
-    @State private var priceDrops = true
-    @State private var inventoryAlerts = true
-    @State private var dealExpiring = true
-    @State private var digestTime = Date()
+    @EnvironmentObject var userPreferences: UserPreferencesManager
     
     var body: some View {
         Form {
@@ -237,17 +353,17 @@ struct NotificationSettingsView: View {
             }
             
             Section("Notification Types") {
-                Toggle("Daily Digest", isOn: $dailyDigest)
+                Toggle("Daily Digest", isOn: $userPreferences.dailyDigestEnabled)
                 
-                if dailyDigest {
-                    DatePicker("Digest Time", selection: $digestTime, displayedComponents: .hourAndMinute)
+                if userPreferences.dailyDigestEnabled {
+                    DatePicker("Digest Time", selection: $userPreferences.digestTime, displayedComponents: .hourAndMinute)
                 }
                 
-                Toggle("Price Drop Alerts", isOn: $priceDrops)
+                Toggle("Price Drop Alerts", isOn: $userPreferences.priceDropAlertsEnabled)
                 
-                Toggle("Inventory Reminders", isOn: $inventoryAlerts)
+                Toggle("Inventory Reminders", isOn: $userPreferences.inventoryAlertsEnabled)
                 
-                Toggle("Expiring Deals", isOn: $dealExpiring)
+                Toggle("Expiring Deals", isOn: $userPreferences.dealExpiringAlertsEnabled)
             }
             .disabled(!userPreferences.notificationsEnabled)
             
@@ -273,7 +389,7 @@ struct NotificationSettingsView: View {
 
 // MARK: - Retailer Preferences View
 struct RetailerPreferencesView: View {
-    @EnvironmentObject var userPreferences: UserPreferences
+    @EnvironmentObject var userPreferences: UserPreferencesManager
     @State private var searchText = ""
     
     var body: some View {
@@ -410,12 +526,16 @@ struct BudgetSettingsView: View {
         case .beauty: return "sparkles"
         case .sports: return "sportscourt"
         case .toys: return "teddybear"
+        case .food: return "fork.knife"
+        case .health: return "heart"
+        case .books: return "book"
         case .other: return "square.grid.2x2"
         }
     }
     
     private func saveBudgetSettings() {
-        // Save budget settings
+        // Save budget settings to backend or UserDefaults
+        print("Saving budget settings...")
     }
 }
 
@@ -424,6 +544,8 @@ struct PrivacySettingsView: View {
     @State private var shareAnalytics = true
     @State private var personalizedRecommendations = true
     @State private var locationBasedDeals = false
+    @State private var showingDeleteAlert = false
+    @State private var showingClearHistoryAlert = false
     
     var body: some View {
         Form {
@@ -450,18 +572,44 @@ struct PrivacySettingsView: View {
             
             Section {
                 Button("Clear Shopping History") {
-                    // Clear history
+                    showingClearHistoryAlert = true
                 }
                 .foregroundColor(.red)
                 
                 Button("Delete Account") {
-                    // Delete account
+                    showingDeleteAlert = true
                 }
                 .foregroundColor(.red)
             }
         }
         .navigationTitle("Privacy")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Clear Shopping History", isPresented: $showingClearHistoryAlert) {
+            Button("Clear", role: .destructive) {
+                clearShoppingHistory()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This will permanently delete all your shopping history. This action cannot be undone.")
+        }
+        .alert("Delete Account", isPresented: $showingDeleteAlert) {
+            Button("Delete", role: .destructive) {
+                deleteAccount()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This will permanently delete your account and all associated data. This action cannot be undone.")
+        }
+    }
+    
+    private func clearShoppingHistory() {
+        // Clear shopping history
+        print("Clearing shopping history...")
+    }
+    
+    private func deleteAccount() {
+        // Delete account
+        print("Deleting account...")
     }
 }
 
@@ -566,7 +714,9 @@ struct SubscriptionDetailsView: View {
     }
     
     private func subscribeToPremium() {
-        // Handle subscription
+        // Handle subscription upgrade
+        authManager.upgradeToPremium()
+        dismiss()
     }
 }
 
@@ -699,9 +849,16 @@ class ProfileViewModel: ObservableObject {
     
     func contactSupport() {
         // Open support email
+        if let url = URL(string: "mailto:support@shopsenseai.com?subject=Support%20Request") {
+            if UIApplication.shared.canOpenURL(url) {
+                UIApplication.shared.open(url)
+            }
+        }
     }
     
     func exportData() {
         // Export user data
+        print("Exporting user data...")
+        // In production, this would generate and share a data export file
     }
 }

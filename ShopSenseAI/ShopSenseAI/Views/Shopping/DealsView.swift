@@ -4,6 +4,7 @@ struct DealsView: View {
     @StateObject private var viewModel = DealsViewModel()
     @State private var selectedCategory: Product.ProductCategory? = nil
     @State private var selectedDealType: DealAlert.DealType? = nil
+    @State private var showingSavedDealsOnly = false
     
     var body: some View {
         NavigationView {
@@ -11,16 +12,23 @@ struct DealsView: View {
                 // Filter Pills
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
-                        FilterPill(title: "All", isSelected: selectedDealType == nil) {
+                        FilterPill(title: "All", isSelected: selectedDealType == nil && !showingSavedDealsOnly) {
+                            selectedDealType = nil
+                            showingSavedDealsOnly = false
+                        }
+                        
+                        FilterPill(title: "Saved", isSelected: showingSavedDealsOnly) {
+                            showingSavedDealsOnly = true
                             selectedDealType = nil
                         }
                         
                         ForEach(DealAlert.DealType.allCases, id: \.self) { type in
                             FilterPill(
                                 title: type.rawValue,
-                                isSelected: selectedDealType == type
+                                isSelected: selectedDealType == type && !showingSavedDealsOnly
                             ) {
                                 selectedDealType = type
+                                showingSavedDealsOnly = false
                             }
                         }
                     }
@@ -29,17 +37,23 @@ struct DealsView: View {
                 .padding(.vertical, 10)
                 
                 // Deals List
-                if viewModel.deals.isEmpty {
-                    EmptyDealsView()
+                if viewModel.isLoading {
+                    ProgressView("Loading deals...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if viewModel.filteredDeals(type: selectedDealType, savedOnly: showingSavedDealsOnly).isEmpty {
+                    EmptyDealsView(showingSavedOnly: showingSavedDealsOnly)
                 } else {
                     List {
-                        ForEach(viewModel.filteredDeals(type: selectedDealType)) { deal in
+                        ForEach(viewModel.filteredDeals(type: selectedDealType, savedOnly: showingSavedDealsOnly)) { deal in
                             DealCard(deal: deal, viewModel: viewModel)
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
                         }
                     }
                     .listStyle(PlainListStyle())
+                    .refreshable {
+                        await viewModel.refreshDeals()
+                    }
                 }
             }
             .navigationTitle("Deals")
@@ -55,8 +69,22 @@ struct DealsView: View {
                         Button(action: { viewModel.sortBy(.expiring) }) {
                             Label("Expiring Soon", systemImage: "clock")
                         }
+                        Button(action: { viewModel.sortBy(.newest) }) {
+                            Label("Newest First", systemImage: "calendar")
+                        }
                     } label: {
                         Image(systemName: "arrow.up.arrow.down.circle")
+                            .foregroundColor(.blue)
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        Task {
+                            await viewModel.refreshDeals()
+                        }
+                    }) {
+                        Image(systemName: "arrow.clockwise")
                             .foregroundColor(.blue)
                     }
                 }
@@ -91,6 +119,16 @@ struct DealCard: View {
                         Text(deal.retailer.name)
                             .font(.caption)
                             .foregroundColor(.secondary)
+                        
+                        Spacer()
+                        
+                        // Category Badge
+                        Text(deal.product.category.rawValue)
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(.systemGray5))
+                            .cornerRadius(4)
                     }
                 }
                 
@@ -108,7 +146,7 @@ struct DealCard: View {
                         .foregroundColor(.white)
                 }
                 .padding(8)
-                .background(Color.red)
+                .background(discountBadgeColor)
                 .cornerRadius(8)
             }
             
@@ -129,6 +167,7 @@ struct DealCard: View {
                         Text("Save $\(deal.savings, specifier: "%.2f")")
                             .font(.caption)
                             .foregroundColor(.green)
+                            .fontWeight(.medium)
                     }
                 }
                 
@@ -158,9 +197,17 @@ struct DealCard: View {
                     Image(systemName: "sparkles")
                         .foregroundColor(.purple)
                     
-                    Text(evaluation.reasoning)
-                        .font(.caption)
-                        .lineLimit(2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("AI Recommendation: \(evaluation.recommendation.rawValue.uppercased())")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(recommendationColor(evaluation.recommendation))
+                        
+                        Text(evaluation.reasoning)
+                            .font(.caption)
+                            .lineLimit(2)
+                            .foregroundColor(.secondary)
+                    }
                     
                     Spacer()
                     
@@ -175,13 +222,28 @@ struct DealCard: View {
                         .cornerRadius(6)
                 }
                 .padding(.top, 8)
+                .padding(.bottom, 4)
+                .background(Color.purple.opacity(0.05))
+                .cornerRadius(8)
             }
             
             // Action Buttons
-            HStack {
+            HStack(spacing: 12) {
                 Button(action: { showingDetail = true }) {
                     Label("View Deal", systemImage: "arrow.right.circle")
                         .font(.caption)
+                        .foregroundColor(.blue)
+                }
+                .buttonStyle(BorderlessButtonStyle())
+                
+                Button(action: {
+                    if let url = URL(string: deal.retailer.websiteURL) {
+                        UIApplication.shared.open(url)
+                    }
+                }) {
+                    Label("Shop Now", systemImage: "cart")
+                        .font(.caption)
+                        .foregroundColor(.green)
                 }
                 .buttonStyle(BorderlessButtonStyle())
                 
@@ -195,14 +257,15 @@ struct DealCard: View {
                         } else {
                             Label("AI Evaluate", systemImage: "wand.and.stars")
                                 .font(.caption)
+                                .foregroundColor(.purple)
                         }
                     }
                     .buttonStyle(BorderlessButtonStyle())
                     .disabled(isEvaluating)
                 }
                 
-                Button(action: { viewModel.saveDeal(deal) }) {
-                    Image(systemName: deal.isSaved ? "bookmark.fill" : "bookmark")
+                Button(action: { viewModel.toggleSaveDeal(deal) }) {
+                    Image(systemName: viewModel.isSaved(deal) ? "bookmark.fill" : "bookmark")
                         .foregroundColor(.blue)
                 }
                 .buttonStyle(BorderlessButtonStyle())
@@ -211,9 +274,19 @@ struct DealCard: View {
         .padding()
         .background(Color(.systemBackground))
         .cornerRadius(12)
-        .shadow(radius: 2)
+        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
         .sheet(isPresented: $showingDetail) {
-            DealDetailView(deal: deal)
+            DealDetailView(deal: deal, viewModel: viewModel)
+        }
+    }
+    
+    private var discountBadgeColor: Color {
+        if deal.discountPercentage >= 50 {
+            return .red
+        } else if deal.discountPercentage >= 30 {
+            return .orange
+        } else {
+            return .blue
         }
     }
     
@@ -237,9 +310,19 @@ struct DealCard: View {
         }
     }
     
+    private func recommendationColor(_ recommendation: DealEvaluation.Recommendation) -> Color {
+        switch recommendation {
+        case .buy: return .green
+        case .wait: return .orange
+        case .skip: return .red
+        }
+    }
+    
     private func expiryText(_ date: Date) -> String {
         let hours = Calendar.current.dateComponents([.hour], from: Date(), to: date).hour ?? 0
-        if hours < 24 {
+        if hours < 1 {
+            return "Expires soon"
+        } else if hours < 24 {
             return "\(hours)h left"
         } else {
             let days = hours / 24
@@ -274,21 +357,49 @@ struct DealCard: View {
         Task {
             do {
                 // In production, this would call Claude API
-                // For now, simulate with delay
-                try await Task.sleep(nanoseconds: 2_000_000_000)
+                let userPreferences = UserPreferences() // Mock preferences
+                let apiService = ClaudeAPIService.shared
+                
+                evaluation = try await apiService.evaluateDeal(deal, userPreferences: userPreferences)
                 
                 await MainActor.run {
-                    evaluation = DealEvaluation(
-                        recommendation: .buy,
-                        score: 8,
-                        reasoning: "Great deal! This price is 15% below the 90-day average."
-                    )
                     isEvaluating = false
                 }
             } catch {
-                isEvaluating = false
+                // Fallback to mock evaluation if API fails
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                
+                await MainActor.run {
+                    evaluation = DealEvaluation(
+                        recommendation: mockRecommendation(),
+                        score: Int.random(in: 5...9),
+                        reasoning: mockReasoning()
+                    )
+                    isEvaluating = false
+                }
             }
         }
+    }
+    
+    private func mockRecommendation() -> DealEvaluation.Recommendation {
+        if deal.discountPercentage >= 40 {
+            return .buy
+        } else if deal.discountPercentage >= 20 {
+            return .wait
+        } else {
+            return .skip
+        }
+    }
+    
+    private func mockReasoning() -> String {
+        let reasons = [
+            "Great deal! This price is below the 90-day average.",
+            "Good discount, but you might find better deals during seasonal sales.",
+            "Price is okay, but this product frequently goes on sale.",
+            "Excellent value! This is the lowest price we've seen.",
+            "Consider waiting - similar deals often appear during holidays."
+        ]
+        return reasons.randomElement() ?? "Analysis complete."
     }
 }
 
@@ -314,20 +425,25 @@ struct FilterPill: View {
 
 // MARK: - Empty Deals View
 struct EmptyDealsView: View {
+    let showingSavedOnly: Bool
+    
     var body: some View {
         VStack(spacing: 20) {
-            Image(systemName: "tag.slash")
+            Image(systemName: showingSavedOnly ? "bookmark.slash" : "tag.slash")
                 .font(.system(size: 60))
                 .foregroundColor(.gray)
             
-            Text("No deals available")
+            Text(showingSavedOnly ? "No saved deals" : "No deals available")
                 .font(.headline)
                 .foregroundColor(.gray)
             
-            Text("Check back later or adjust your preferences")
+            Text(showingSavedOnly ?
+                 "Save deals to view them here later" :
+                 "Check back later or adjust your preferences to find more deals")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
+                .padding(.horizontal)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -336,7 +452,9 @@ struct EmptyDealsView: View {
 // MARK: - Deal Detail View
 struct DealDetailView: View {
     let deal: DealAlert
+    @ObservedObject var viewModel: DealsViewModel
     @Environment(\.dismiss) var dismiss
+    @State private var showingShareSheet = false
     
     var body: some View {
         NavigationView {
@@ -344,12 +462,21 @@ struct DealDetailView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     // Product Image Placeholder
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.3))
+                        .fill(LinearGradient(
+                            colors: [.blue.opacity(0.3), .purple.opacity(0.3)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
                         .frame(height: 200)
                         .overlay(
-                            Image(systemName: "photo")
-                                .font(.system(size: 50))
-                                .foregroundColor(.gray)
+                            VStack {
+                                Image(systemName: categoryIcon(for: deal.product.category))
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.white)
+                                Text(deal.product.category.rawValue)
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
                         )
                     
                     // Deal Information
@@ -358,8 +485,9 @@ struct DealDetailView: View {
                             .font(.title2)
                             .fontWeight(.bold)
                         
+                        // Price Section
                         HStack {
-                            VStack(alignment: .leading) {
+                            VStack(alignment: .leading, spacing: 4) {
                                 Text("Current Price")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -371,7 +499,7 @@ struct DealDetailView: View {
                             
                             Spacer()
                             
-                            VStack(alignment: .trailing) {
+                            VStack(alignment: .trailing, spacing: 4) {
                                 Text("You Save")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -391,29 +519,85 @@ struct DealDetailView: View {
                         
                         // Retailer Info
                         HStack {
-                            Image(systemName: "building.2")
-                            Text(deal.retailer.name)
-                                .fontWeight(.medium)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Label(deal.retailer.name, systemImage: "building.2")
+                                    .fontWeight(.medium)
+                                Text("Trusted retailer")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
                             Spacer()
+                            
                             Button("Visit Store") {
-                                // Open retailer URL
+                                if let url = URL(string: deal.retailer.websiteURL) {
+                                    UIApplication.shared.open(url)
+                                }
                             }
                             .buttonStyle(.borderedProminent)
                         }
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
                         
                         // Deal Details
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label(deal.dealType.rawValue, systemImage: "tag.fill")
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Deal Details")
+                                .font(.headline)
                             
-                            if let expiry = deal.expiryDate {
-                                Label("Expires \(expiry, style: .relative)", systemImage: "clock")
-                                    .foregroundColor(.orange)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label(deal.dealType.rawValue, systemImage: dealTypeIcon)
+                                
+                                if let expiry = deal.expiryDate {
+                                    Label("Expires \(expiry, style: .relative)", systemImage: "clock")
+                                        .foregroundColor(.orange)
+                                }
+                                
+                                Label("Posted \(deal.alertDate, style: .relative)", systemImage: "calendar")
+                                    .foregroundColor(.secondary)
+                                
+                                Label("Original price: $\(deal.previousPrice, specifier: "%.2f")", systemImage: "tag")
+                                    .foregroundColor(.secondary)
+                            }
+                            .font(.subheadline)
+                        }
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                        
+                        // Action Buttons
+                        VStack(spacing: 12) {
+                            Button(action: {
+                                if let url = URL(string: deal.retailer.websiteURL) {
+                                    UIApplication.shared.open(url)
+                                }
+                            }) {
+                                Label("Shop This Deal", systemImage: "cart.fill")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.green)
+                                    .cornerRadius(12)
                             }
                             
-                            Label("Posted \(deal.alertDate, style: .relative)", systemImage: "calendar")
-                                .foregroundColor(.secondary)
+                            HStack(spacing: 12) {
+                                Button(action: { viewModel.toggleSaveDeal(deal) }) {
+                                    Label(
+                                        viewModel.isSaved(deal) ? "Remove from Saved" : "Save Deal",
+                                        systemImage: viewModel.isSaved(deal) ? "bookmark.fill" : "bookmark"
+                                    )
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.bordered)
+                                
+                                Button(action: { showingShareSheet = true }) {
+                                    Label("Share", systemImage: "square.and.arrow.up")
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.bordered)
+                            }
                         }
-                        .font(.subheadline)
                     }
                     .padding(.horizontal)
                 }
@@ -426,47 +610,133 @@ struct DealDetailView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingShareSheet) {
+            ShareSheet(deal: deal)
+        }
     }
+    
+    private var dealTypeIcon: String {
+        switch deal.dealType {
+        case .priceDropAlert: return "arrow.down.circle"
+        case .flashSale: return "bolt.fill"
+        case .couponAvailable: return "ticket.fill"
+        case .bundleDeal: return "square.stack.3d.up"
+        case .seasonalSale: return "leaf.fill"
+        }
+    }
+    
+    private func categoryIcon(for category: Product.ProductCategory) -> String {
+        switch category {
+        case .electronics: return "tv"
+        case .groceries: return "cart"
+        case .clothing: return "tshirt"
+        case .home: return "house"
+        case .beauty: return "sparkles"
+        case .sports: return "sportscourt"
+        case .toys: return "teddybear"
+        case .food: return "fork.knife"
+        case .health: return "heart"
+        case .books: return "book"
+        case .other: return "square.grid.2x2"
+        }
+    }
+}
+
+// MARK: - Share Sheet
+struct ShareSheet: UIViewControllerRepresentable {
+    let deal: DealAlert
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let text = "Check out this deal: \(deal.product.name) for $\(String(format: "%.2f", deal.currentPrice)) (was $\(String(format: "%.2f", deal.previousPrice))) at \(deal.retailer.name)"
+        let activityController = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+        return activityController
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - View Model
 class DealsViewModel: ObservableObject {
     @Published var deals: [DealAlert] = []
     @Published var savedDeals: Set<UUID> = []
+    @Published var isLoading = false
     
     enum SortOption {
         case savings
         case percentage
         case expiring
+        case newest
+    }
+    
+    init() {
+        loadSavedDeals()
     }
     
     func loadDeals() {
+        isLoading = true
+        
         // In production, fetch from backend
-        // Mock data for demo
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.generateMockDeals()
+            self.isLoading = false
+        }
+    }
+    
+    func refreshDeals() async {
+        await MainActor.run {
+            isLoading = true
+        }
+        
+        // Simulate network delay
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        
+        await MainActor.run {
+            generateMockDeals()
+            isLoading = false
+        }
+    }
+    
+    private func generateMockDeals() {
         let mockProducts = [
-            Product(name: "iPad Air", description: "Tablet", category: .electronics, imageURL: nil, barcode: nil, brand: "Apple"),
-            Product(name: "Instant Pot", description: "Pressure Cooker", category: .home, imageURL: nil, barcode: nil, brand: "Instant Pot"),
-            Product(name: "Running Shoes", description: "Athletic footwear", category: .clothing, imageURL: nil, barcode: nil, brand: "Nike")
+            Product(name: "iPad Air 5th Gen", description: "Tablet with M1 chip", category: .electronics, imageURL: nil, barcode: nil, brand: "Apple"),
+            Product(name: "Instant Pot Duo 7-in-1", description: "Electric Pressure Cooker", category: .home, imageURL: nil, barcode: nil, brand: "Instant Pot"),
+            Product(name: "Nike Air Max 270", description: "Running Shoes", category: .sports, imageURL: nil, barcode: nil, brand: "Nike"),
+            Product(name: "The Great Gatsby", description: "Classic novel", category: .books, imageURL: nil, barcode: nil, brand: nil),
+            Product(name: "Vitamin D3 Supplements", description: "Health supplement", category: .health, imageURL: nil, barcode: nil, brand: "Nature Made"),
+            Product(name: "Organic Bananas", description: "Fresh fruit", category: .food, imageURL: nil, barcode: nil, brand: nil)
         ]
         
         deals = mockProducts.enumerated().map { index, product in
-            DealAlert(
+            let previousPrice = Double.random(in: 100...300)
+            let discountPercentage = Double.random(in: 15...60)
+            let currentPrice = previousPrice * (1 - discountPercentage / 100)
+            
+            return DealAlert(
                 product: product,
                 retailer: Retailer.allRetailers[index % Retailer.allRetailers.count],
-                currentPrice: Double.random(in: 50...200),
-                previousPrice: Double.random(in: 100...300),
-                discount: 0,
-                discountPercentage: Double.random(in: 10...50),
-                alertDate: Date().addingTimeInterval(-Double.random(in: 0...86400)),
-                expiryDate: Date().addingTimeInterval(Double.random(in: 3600...259200)),
+                currentPrice: currentPrice,
+                previousPrice: previousPrice,
+                discount: previousPrice - currentPrice,
+                discountPercentage: discountPercentage,
+                alertDate: Date().addingTimeInterval(-Double.random(in: 0...86400 * 3)),
+                expiryDate: Bool.random() ? Date().addingTimeInterval(Double.random(in: 3600...259200)) : nil,
                 dealType: DealAlert.DealType.allCases.randomElement()!
             )
         }
     }
     
-    func filteredDeals(type: DealAlert.DealType?) -> [DealAlert] {
-        guard let type = type else { return deals }
-        return deals.filter { $0.dealType == type }
+    func filteredDeals(type: DealAlert.DealType?, savedOnly: Bool) -> [DealAlert] {
+        var filteredDeals = deals
+        
+        if savedOnly {
+            filteredDeals = filteredDeals.filter { savedDeals.contains($0.id) }
+        }
+        
+        if let type = type {
+            filteredDeals = filteredDeals.filter { $0.dealType == type }
+        }
+        
+        return filteredDeals
     }
     
     func sortBy(_ option: SortOption) {
@@ -477,28 +747,37 @@ class DealsViewModel: ObservableObject {
             deals.sort { $0.discountPercentage > $1.discountPercentage }
         case .expiring:
             deals.sort { ($0.expiryDate ?? Date.distantFuture) < ($1.expiryDate ?? Date.distantFuture) }
+        case .newest:
+            deals.sort { $0.alertDate > $1.alertDate }
         }
     }
     
-    func saveDeal(_ deal: DealAlert) {
+    func toggleSaveDeal(_ deal: DealAlert) {
         if savedDeals.contains(deal.id) {
             savedDeals.remove(deal.id)
         } else {
             savedDeals.insert(deal.id)
         }
+        saveDealsToPersistence()
     }
-}
-
-// MARK: - Extensions
-extension DealAlert.DealType: CaseIterable {
-    static var allCases: [DealAlert.DealType] {
-        return [.priceDropAlert, .flashSale, .couponAvailable, .bundleDeal, .seasonalSale]
+    
+    func isSaved(_ deal: DealAlert) -> Bool {
+        return savedDeals.contains(deal.id)
     }
-}
-
-extension DealAlert {
-    var isSaved: Bool {
-        // This would check against saved deals in the view model
-        return false
+    
+    private func loadSavedDeals() {
+        // Load from UserDefaults
+        if let data = UserDefaults.standard.data(forKey: "SavedDeals"),
+           let savedArray = try? JSONDecoder().decode([UUID].self, from: data) {
+            savedDeals = Set(savedArray)
+        }
+    }
+    
+    private func saveDealsToPersistence() {
+        // Save to UserDefaults
+        let savedArray = Array(savedDeals)
+        if let data = try? JSONEncoder().encode(savedArray) {
+            UserDefaults.standard.set(data, forKey: "SavedDeals")
+        }
     }
 }

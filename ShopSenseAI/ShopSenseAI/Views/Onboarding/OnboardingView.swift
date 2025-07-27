@@ -1,11 +1,12 @@
 import SwiftUI
+import UserNotifications
 
 struct OnboardingView: View {
     @State private var currentPage = 0
     @State private var showingSignUp = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @EnvironmentObject var authManager: AuthenticationManager
-    @EnvironmentObject var userPreferences: UserPreferences
+    @EnvironmentObject var userPreferences: UserPreferencesManager
     
     var body: some View {
         VStack {
@@ -23,9 +24,11 @@ struct OnboardingView: View {
                     
                     RetailerSelectionPage()
                         .tag(3)
+                        .environmentObject(userPreferences)
                     
                     NotificationSetupPage()
                         .tag(4)
+                        .environmentObject(userPreferences)
                 }
                 .tabViewStyle(PageTabViewStyle())
                 .indexViewStyle(PageIndexViewStyle(backgroundDisplayMode: .always))
@@ -65,6 +68,7 @@ struct OnboardingView: View {
                 .padding()
             } else {
                 SignUpView(onComplete: completeOnboarding)
+                    .environmentObject(authManager)
             }
         }
         .background(Color(.systemBackground))
@@ -235,7 +239,7 @@ struct HowItWorksPage: View {
 
 // MARK: - Retailer Selection Page
 struct RetailerSelectionPage: View {
-    @EnvironmentObject var userPreferences: UserPreferences
+    @EnvironmentObject var userPreferences: UserPreferencesManager
     @State private var selectedRetailers: Set<String> = []
     
     var body: some View {
@@ -270,6 +274,9 @@ struct RetailerSelectionPage: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
+        .onAppear {
+            selectedRetailers = userPreferences.preferredRetailers
+        }
     }
     
     private func toggleRetailer(_ id: String) {
@@ -279,14 +286,15 @@ struct RetailerSelectionPage: View {
             selectedRetailers.insert(id)
         }
         userPreferences.preferredRetailers = selectedRetailers
+        userPreferences.savePreferences()
     }
 }
 
 // MARK: - Notification Setup Page
 struct NotificationSetupPage: View {
-    @EnvironmentObject var userPreferences: UserPreferences
+    @EnvironmentObject var userPreferences: UserPreferencesManager
     @State private var enableNotifications = true
-    @State private var dailyDigestTime = Date()
+    @State private var hasRequestedPermission = false
     
     var body: some View {
         VStack(spacing: 30) {
@@ -314,9 +322,11 @@ struct NotificationSetupPage: View {
                         .toggleStyle(SwitchToggleStyle(tint: .blue))
                         .onChange(of: enableNotifications) { value in
                             userPreferences.notificationsEnabled = value
-                            if value {
+                            if value && !hasRequestedPermission {
                                 requestNotificationPermission()
+                                hasRequestedPermission = true
                             }
+                            userPreferences.savePreferences()
                         }
                 }
                 .padding()
@@ -329,11 +339,11 @@ struct NotificationSetupPage: View {
                         Text("Daily Digest Time")
                             .font(.headline)
                         
-                        DatePicker("", selection: $dailyDigestTime, displayedComponents: .hourAndMinute)
+                        DatePicker("", selection: $userPreferences.digestTime, displayedComponents: .hourAndMinute)
                             .datePickerStyle(WheelDatePickerStyle())
                             .labelsHidden()
-                            .onChange(of: dailyDigestTime) { value in
-                                userPreferences.dailyDigestTime = value
+                            .onChange(of: userPreferences.digestTime) { _ in
+                                userPreferences.savePreferences()
                             }
                         
                         Text("Get your personalized deals summary at this time each day")
@@ -344,17 +354,54 @@ struct NotificationSetupPage: View {
                     .background(Color(.systemGray6))
                     .cornerRadius(12)
                 }
+                
+                // Alert Preferences
+                if enableNotifications {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Alert Preferences")
+                            .font(.headline)
+                        
+                        VStack(spacing: 8) {
+                            Toggle("Price Drop Alerts", isOn: $userPreferences.priceDropAlertsEnabled)
+                            Toggle("Deal Expiring Soon", isOn: $userPreferences.dealExpiringAlertsEnabled)
+                            Toggle("Inventory Reminders", isOn: $userPreferences.inventoryAlertsEnabled)
+                        }
+                        .onChange(of: userPreferences.priceDropAlertsEnabled) { _ in
+                            userPreferences.savePreferences()
+                        }
+                        .onChange(of: userPreferences.dealExpiringAlertsEnabled) { _ in
+                            userPreferences.savePreferences()
+                        }
+                        .onChange(of: userPreferences.inventoryAlertsEnabled) { _ in
+                            userPreferences.savePreferences()
+                        }
+                    }
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                }
             }
             .padding(.horizontal)
             
             Spacer()
         }
+        .onAppear {
+            enableNotifications = userPreferences.notificationsEnabled
+        }
     }
     
     private func requestNotificationPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if granted {
-                print("Notification permission granted")
+            DispatchQueue.main.async {
+                if granted {
+                    print("Notification permission granted")
+                    userPreferences.notificationsEnabled = true
+                } else {
+                    print("Notification permission denied")
+                    userPreferences.notificationsEnabled = false
+                    enableNotifications = false
+                }
+                userPreferences.savePreferences()
             }
         }
     }
@@ -377,86 +424,109 @@ struct SignUpView: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 20) {
-                // Logo
-                Image(systemName: "cart.fill.badge.plus")
-                    .font(.system(size: 60))
-                    .foregroundColor(.blue)
-                    .padding(.top, 40)
-                
-                Text("Create Account")
-                    .font(.title)
-                    .fontWeight(.bold)
-                
-                // Form
-                VStack(spacing: 16) {
-                    TextField("Email", text: $email)
-                        .textFieldStyle(RoundedTextFieldStyle())
-                        .textContentType(.emailAddress)
-                        .autocapitalization(.none)
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Logo
+                    Image(systemName: "cart.fill.badge.plus")
+                        .font(.system(size: 60))
+                        .foregroundColor(.blue)
+                        .padding(.top, 40)
                     
-                    SecureField("Password", text: $password)
-                        .textFieldStyle(RoundedTextFieldStyle())
-                        .textContentType(.newPassword)
+                    Text("Create Account")
+                        .font(.title)
+                        .fontWeight(.bold)
                     
-                    SecureField("Confirm Password", text: $confirmPassword)
-                        .textFieldStyle(RoundedTextFieldStyle())
-                        .textContentType(.newPassword)
-                    
-                    // Terms
-                    HStack {
-                        Button(action: { acceptTerms.toggle() }) {
-                            Image(systemName: acceptTerms ? "checkmark.square.fill" : "square")
-                                .foregroundColor(acceptTerms ? .blue : .gray)
+                    // Form
+                    VStack(spacing: 16) {
+                        TextField("Email", text: $email)
+                            .textFieldStyle(RoundedTextFieldStyle())
+                            .textContentType(.emailAddress)
+                            .autocapitalization(.none)
+                            .keyboardType(.emailAddress)
+                        
+                        SecureField("Password", text: $password)
+                            .textFieldStyle(RoundedTextFieldStyle())
+                            .textContentType(.newPassword)
+                        
+                        SecureField("Confirm Password", text: $confirmPassword)
+                            .textFieldStyle(RoundedTextFieldStyle())
+                            .textContentType(.newPassword)
+                        
+                        // Password Requirements
+                        if !password.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                PasswordRequirement(
+                                    text: "At least 8 characters",
+                                    isMet: password.count >= 8
+                                )
+                                PasswordRequirement(
+                                    text: "Passwords match",
+                                    isMet: password == confirmPassword && !confirmPassword.isEmpty
+                                )
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         
-                        Text("I agree to the ")
-                            .font(.caption)
-                        
-                        Link("Terms of Service", destination: URL(string: "https://shopsenseai.com/terms")!)
-                            .font(.caption)
-                        
-                        Text(" and ")
-                            .font(.caption)
-                        
-                        Link("Privacy Policy", destination: URL(string: "https://shopsenseai.com/privacy")!)
-                            .font(.caption)
+                        // Terms
+                        HStack {
+                            Button(action: { acceptTerms.toggle() }) {
+                                Image(systemName: acceptTerms ? "checkmark.square.fill" : "square")
+                                    .foregroundColor(acceptTerms ? .blue : .gray)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 2) {
+                                    Text("I agree to the")
+                                        .font(.caption)
+                                    Link("Terms of Service", destination: URL(string: "https://shopsenseai.com/terms")!)
+                                        .font(.caption)
+                                }
+                                HStack(spacing: 2) {
+                                    Text("and")
+                                        .font(.caption)
+                                    Link("Privacy Policy", destination: URL(string: "https://shopsenseai.com/privacy")!)
+                                        .font(.caption)
+                                }
+                            }
+                            
+                            Spacer()
+                        }
                     }
-                }
-                .padding(.horizontal)
-                
-                // Sign Up Button
-                Button(action: signUp) {
-                    if isLoading {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    } else {
-                        Text("Create Account")
-                            .fontWeight(.semibold)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(isFormValid ? Color.blue : Color.gray)
-                .foregroundColor(.white)
-                .cornerRadius(12)
-                .disabled(!isFormValid || isLoading)
-                .padding(.horizontal)
-                
-                // Login Link
-                HStack {
-                    Text("Already have an account?")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                    .padding(.horizontal)
                     
-                    Button("Sign In") {
-                        showingLogin = true
+                    // Sign Up Button
+                    Button(action: signUp) {
+                        if isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Text("Create Account")
+                                .fontWeight(.semibold)
+                        }
                     }
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(isFormValid ? Color.blue : Color.gray)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                    .disabled(!isFormValid || isLoading)
+                    .padding(.horizontal)
+                    
+                    // Login Link
+                    HStack {
+                        Text("Already have an account?")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Button("Sign In") {
+                            showingLogin = true
+                        }
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    }
+                    
+                    Spacer(minLength: 50)
                 }
-                
-                Spacer()
             }
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) { }
@@ -465,6 +535,7 @@ struct SignUpView: View {
             }
             .sheet(isPresented: $showingLogin) {
                 LoginView(onComplete: onComplete)
+                    .environmentObject(authManager)
             }
         }
     }
@@ -475,7 +546,8 @@ struct SignUpView: View {
         password == confirmPassword &&
         password.count >= 8 &&
         acceptTerms &&
-        email.contains("@")
+        email.contains("@") &&
+        email.contains(".")
     }
     
     private func signUp() {
@@ -514,59 +586,67 @@ struct LoginView: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 20) {
-                // Logo
-                Image(systemName: "cart.fill.badge.plus")
-                    .font(.system(size: 60))
-                    .foregroundColor(.blue)
-                    .padding(.top, 40)
-                
-                Text("Welcome Back")
-                    .font(.title)
-                    .fontWeight(.bold)
-                
-                // Form
-                VStack(spacing: 16) {
-                    TextField("Email", text: $email)
-                        .textFieldStyle(RoundedTextFieldStyle())
-                        .textContentType(.emailAddress)
-                        .autocapitalization(.none)
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Logo
+                    Image(systemName: "cart.fill.badge.plus")
+                        .font(.system(size: 60))
+                        .foregroundColor(.blue)
+                        .padding(.top, 40)
                     
-                    SecureField("Password", text: $password)
-                        .textFieldStyle(RoundedTextFieldStyle())
-                        .textContentType(.password)
+                    Text("Welcome Back")
+                        .font(.title)
+                        .fontWeight(.bold)
                     
-                    HStack {
-                        Spacer()
-                        Button("Forgot Password?") {
-                            // Handle forgot password
+                    // Form
+                    VStack(spacing: 16) {
+                        TextField("Email", text: $email)
+                            .textFieldStyle(RoundedTextFieldStyle())
+                            .textContentType(.emailAddress)
+                            .autocapitalization(.none)
+                            .keyboardType(.emailAddress)
+                        
+                        SecureField("Password", text: $password)
+                            .textFieldStyle(RoundedTextFieldStyle())
+                            .textContentType(.password)
+                        
+                        HStack {
+                            Spacer()
+                            Button("Forgot Password?") {
+                                // Handle forgot password
+                                print("Forgot password tapped")
+                            }
+                            .font(.caption)
                         }
-                        .font(.caption)
                     }
-                }
-                .padding(.horizontal)
-                
-                // Sign In Button
-                Button(action: signIn) {
-                    if isLoading {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    } else {
-                        Text("Sign In")
-                            .fontWeight(.semibold)
+                    .padding(.horizontal)
+                    
+                    // Sign In Button
+                    Button(action: signIn) {
+                        if isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Text("Sign In")
+                                .fontWeight(.semibold)
+                        }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(isFormValid ? Color.blue : Color.gray)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                    .disabled(!isFormValid || isLoading)
+                    .padding(.horizontal)
+                    
+                    Spacer(minLength: 50)
                 }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(isFormValid ? Color.blue : Color.gray)
-                .foregroundColor(.white)
-                .cornerRadius(12)
-                .disabled(!isFormValid || isLoading)
-                .padding(.horizontal)
-                
-                Spacer()
             }
-            .navigationBarItems(leading: Button("Cancel") { dismiss() })
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) { }
             } message: {
@@ -576,7 +656,7 @@ struct LoginView: View {
     }
     
     private var isFormValid: Bool {
-        !email.isEmpty && !password.isEmpty && email.contains("@")
+        !email.isEmpty && !password.isEmpty && email.contains("@") && email.contains(".")
     }
     
     private func signIn() {
@@ -587,6 +667,7 @@ struct LoginView: View {
                 try await authManager.signIn(email: email, password: password)
                 await MainActor.run {
                     isLoading = false
+                    dismiss()
                     onComplete()
                 }
             } catch {
@@ -689,16 +770,18 @@ struct RetailerSelectionCard: View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Circle()
-                    .fill(Color(.systemGray5))
+                    .fill(isSelected ? Color.blue.opacity(0.2) : Color(.systemGray5))
                     .frame(width: 60, height: 60)
                     .overlay(
                         Text(retailer.name.prefix(2).uppercased())
                             .fontWeight(.semibold)
+                            .foregroundColor(isSelected ? .blue : .primary)
                     )
                 
                 Text(retailer.name)
                     .font(.caption)
                     .lineLimit(1)
+                    .foregroundColor(isSelected ? .blue : .primary)
                 
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .foregroundColor(isSelected ? .blue : .gray)
@@ -713,6 +796,23 @@ struct RetailerSelectionCard: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+struct PasswordRequirement: View {
+    let text: String
+    let isMet: Bool
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: isMet ? "checkmark.circle.fill" : "circle")
+                .foregroundColor(isMet ? .green : .gray)
+                .font(.caption)
+            
+            Text(text)
+                .font(.caption)
+                .foregroundColor(isMet ? .green : .secondary)
+        }
     }
 }
 

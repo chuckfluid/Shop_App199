@@ -1,76 +1,76 @@
 import SwiftUI
+import Foundation
 
+// MARK: - Views
 struct ShoppingListView: View {
     @StateObject private var viewModel = ShoppingListViewModel()
     @State private var showingAddItem = false
     @State private var searchText = ""
     
     var body: some View {
-        NavigationView {
-            VStack {
-                // Search and Filter Bar
+        VStack {
+            // Search and Filter Bar
+            HStack {
                 HStack {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.gray)
-                        TextField("Search items...", text: $searchText)
-                    }
-                    .padding(8)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-                    
-                    Menu {
-                        Button("All Items") { viewModel.filterBy(.all) }
-                        Button("Tracking Only") { viewModel.filterBy(.tracking) }
-                        Divider()
-                        ForEach(ShoppingListItem.Priority.allCases, id: \.self) { priority in
-                            Button(priority.rawValue) { viewModel.filterBy(.priority(priority)) }
-                        }
-                    } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .foregroundColor(.blue)
-                    }
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    TextField("Search items...", text: $searchText)
                 }
-                .padding(.horizontal)
+                .padding(8)
+                .background(Color(.systemGray6))
+                .cornerRadius(8)
                 
-                // Shopping List
-                if viewModel.items.isEmpty {
-                    EmptyShoppingListView()
-                } else {
-                    List {
-                        ForEach(viewModel.filteredItems(searchText: searchText)) { item in
-                            ShoppingListItemRow(item: item, viewModel: viewModel)
-                        }
-                        .onDelete(perform: viewModel.deleteItems)
+                Menu {
+                    Button("All Items") { viewModel.filterBy(.all) }
+                    Button("Tracking Only") { viewModel.filterBy(.tracking) }
+                    Divider()
+                    ForEach(ShoppingListItem.Priority.allCases, id: \.self) { priority in
+                        Button(priority.rawValue) { viewModel.filterBy(.priority(priority)) }
                     }
-                    .listStyle(PlainListStyle())
-                }
-                
-                // Summary Bar
-                if !viewModel.items.isEmpty {
-                    ShoppingSummaryBar(
-                        itemCount: viewModel.items.count,
-                        estimatedTotal: viewModel.estimatedTotal,
-                        potentialSavings: viewModel.potentialSavings
-                    )
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                        .foregroundColor(.blue)
                 }
             }
-            .navigationTitle("Shopping List")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showingAddItem = true }) {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundColor(.blue)
+            .padding(.horizontal)
+            
+            // Shopping List
+            if viewModel.items.isEmpty {
+                EmptyShoppingListView()
+            } else {
+                List {
+                    ForEach(viewModel.filteredItems(searchText: searchText)) { item in
+                        ShoppingListItemRow(item: item, viewModel: viewModel)
                     }
+                    .onDelete(perform: viewModel.deleteItems)
                 }
-                
-                ToolbarItem(placement: .navigationBarLeading) {
-                    EditButton()
+                .listStyle(PlainListStyle())
+            }
+            
+            // Summary Bar
+            if !viewModel.items.isEmpty {
+                ShoppingSummaryBar(
+                    itemCount: viewModel.items.count,
+                    estimatedTotal: viewModel.estimatedTotal,
+                    potentialSavings: viewModel.potentialSavings
+                )
+            }
+        }
+        .navigationTitle("Shopping List")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: { showingAddItem = true }) {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundColor(.blue)
                 }
             }
-            .sheet(isPresented: $showingAddItem) {
-                AddItemView(viewModel: viewModel)
+            
+            ToolbarItem(placement: .navigationBarLeading) {
+                EditButton()
             }
+        }
+        .sheet(isPresented: $showingAddItem) {
+            AddItemView(viewModel: viewModel)
         }
     }
 }
@@ -286,8 +286,8 @@ struct ItemDetailView: View {
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                     
-                                    if pricePoint.shippingCost ?? 0 > 0 {
-                                        Text("+ $\(pricePoint.shippingCost!, specifier: "%.2f") shipping")
+                                    if let shippingCost = pricePoint.shippingCost, shippingCost > 0 {
+                                        Text("+ $\(shippingCost, specifier: "%.2f") shipping")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                     }
@@ -295,6 +295,9 @@ struct ItemDetailView: View {
                                 
                                 Button(action: {
                                     // Open retailer link
+                                    if let url = URL(string: pricePoint.url) {
+                                        UIApplication.shared.open(url)
+                                    }
                                 }) {
                                     Image(systemName: "arrow.up.right.square")
                                         .foregroundColor(.blue)
