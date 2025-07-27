@@ -527,7 +527,7 @@
 				DEVELOPMENT_TEAM = H53WEUDJ77;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = /Users/chasefloied/Desktop/ShopSenseAI/ShopSenseAI/ShopSenseAI;
+				INFOPLIST_FILE = /Users/chasefloied/Desktop/ShopSenseAI/ShopSenseAI/ShopSenseAI/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = ShopSenseAI;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -558,7 +558,7 @@
 				DEVELOPMENT_TEAM = H53WEUDJ77;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = /Users/chasefloied/Desktop/ShopSenseAI/ShopSenseAI/ShopSenseAI;
+				INFOPLIST_FILE = /Users/chasefloied/Desktop/ShopSenseAI/ShopSenseAI/ShopSenseAI/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = ShopSenseAI;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
