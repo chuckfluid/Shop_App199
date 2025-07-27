@@ -20,7 +20,6 @@
 		971CBF462E36323900871644 /* ClaudeAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF452E36323800871644 /* ClaudeAPIService.swift */; };
 		971CBF482E36324D00871644 /* PriceTrackingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF472E36324B00871644 /* PriceTrackingService.swift */; };
 		971CBF4B2E36326400871644 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF4A2E36326200871644 /* NotificationService.swift */; };
-		97ECC4C82E365B1900766189 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 97ECC4C72E365B1900766189 /* Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -330,7 +329,6 @@
 			files = (
 				971CBF292E362E5A00871644 /* Preview Assets.xcassets in Resources */,
 				971CBF2A2E362E5A00871644 /* Assets.xcassets in Resources */,
-				97ECC4C82E365B1900766189 /* Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
