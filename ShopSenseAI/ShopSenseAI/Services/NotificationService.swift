@@ -135,7 +135,7 @@ class NotificationService: NSObject, ObservableObject {
         
         let content = UNMutableNotificationContent()
         content.title = "⏰ Deal Expiring Soon!"
-        content.body = "\(deal.product.name) deal expires in 1 hour. Save $\(deal.savings, specifier: "%.2f")"
+        content.body = "\(deal.product.name) deal expires in 1 hour. Save $\(String(format: "%.2f", deal.savings))"
         content.sound = .default
         content.categoryIdentifier = "EXPIRING_DEAL"
         content.userInfo = ["dealId": deal.id.uuidString]
