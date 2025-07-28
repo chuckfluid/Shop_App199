@@ -20,6 +20,7 @@
 		971CBF462E36323900871644 /* ClaudeAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF452E36323800871644 /* ClaudeAPIService.swift */; };
 		971CBF482E36324D00871644 /* PriceTrackingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF472E36324B00871644 /* PriceTrackingService.swift */; };
 		971CBF4B2E36326400871644 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971CBF4A2E36326200871644 /* NotificationService.swift */; };
+		97BBC3142E36F02D0026ADC2 /* APICacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97BBC3132E36F01C0026ADC2 /* APICacheManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,6 +57,7 @@
 		971CBF452E36323800871644 /* ClaudeAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeAPIService.swift; sourceTree = "<group>"; };
 		971CBF472E36324B00871644 /* PriceTrackingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceTrackingService.swift; sourceTree = "<group>"; };
 		971CBF4A2E36326200871644 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		97BBC3132E36F01C0026ADC2 /* APICacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APICacheManager.swift; sourceTree = "<group>"; };
 		97ECC4C72E365B1900766189 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = ShopSenseAI/Info.plist; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -203,6 +205,7 @@
 		971CBF332E3630A200871644 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				97BBC3132E36F01C0026ADC2 /* APICacheManager.swift */,
 				971CBF4A2E36326200871644 /* NotificationService.swift */,
 				971CBF472E36324B00871644 /* PriceTrackingService.swift */,
 				971CBF452E36323800871644 /* ClaudeAPIService.swift */,
@@ -358,6 +361,7 @@
 				971CBF3D2E3631A100871644 /* ShoppingListView.swift in Sources */,
 				971CBF442E36322A00871644 /* ProfileView.swift in Sources */,
 				971CBF462E36323900871644 /* ClaudeAPIService.swift in Sources */,
+				97BBC3142E36F02D0026ADC2 /* APICacheManager.swift in Sources */,
 				971CBF422E36321E00871644 /* InventoryView.swift in Sources */,
 				971CBF352E3630EF00871644 /* ShopSenseAIApp.swift in Sources */,
 				971CBF3B2E36319500871644 /* OnboardingView.swift in Sources */,

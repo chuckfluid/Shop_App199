@@ -19,7 +19,15 @@ class ClaudeAPIService: ObservableObject {
     
     private let apiKey: String
     private let baseURL = "https://api.anthropic.com/v1/messages"
-    private let model = "claude-4-sonnet-20250514" // Updated to latest model
+    private let model = "claude-4-sonnet-20250514"
+    private let cacheManager = APICacheManager.shared
+    
+    // Rate limiting
+    private var lastAPICallTime: Date?
+    private let minimumTimeBetweenCalls: TimeInterval = 2.0 // 2 seconds
+    private let apiCallQueue = DispatchQueue(label: "com.shopsenseai.api", qos: .userInitiated)
+    private var pendingRequests = 0
+    private let maxConcurrentRequests = 3
     
     private init() {
         // IMPORTANT: In production, store this securely in Keychain, not in code
@@ -27,36 +35,123 @@ class ClaudeAPIService: ObservableObject {
         self.apiKey = "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" // Replace with your actual API key
     }
     
-    // MARK: - Shopping Intelligence Analysis
-    func analyzeShoppingPattern(purchases: [Purchase], inventory: [InventoryItem]) async throws -> ShoppingAnalysis {
+    // MARK: - Shopping Intelligence Analysis with Caching
+    func analyzeShoppingPattern(purchases: [Purchase], inventory: [InventoryItem], forceRefresh: Bool = false) async throws -> ShoppingAnalysis {
+        let cacheKey = "shopping_analysis_\(AuthenticationManager.shared.userProfile?.id ?? "default")"
+        
+        // Check cache first unless force refresh
+        if !forceRefresh,
+           let cached: ShoppingAnalysis = cacheManager.getCachedResponse(for: cacheKey, type: ShoppingAnalysis.self) {
+            return cached
+        }
+        
+        // Check if user is premium for real-time analysis
+        guard AuthenticationManager.shared.subscriptionTier == .premium || forceRefresh else {
+            // Free users get limited analysis
+            return createBasicShoppingAnalysis(purchases: purchases, inventory: inventory)
+        }
+        
+        // Rate limiting
+        try await enforceRateLimit()
+        
         let prompt = createShoppingAnalysisPrompt(purchases: purchases, inventory: inventory)
         let response = try await sendRequest(prompt: prompt)
-        return try parseShoppingAnalysis(from: response)
+        let analysis = try parseShoppingAnalysis(from: response)
+        
+        // Cache the response
+        cacheManager.cacheResponse(analysis, for: cacheKey)
+        
+        return analysis
     }
     
-    // MARK: - Price Prediction (Using existing PricePrediction from Models.swift)
-    func predictOptimalBuyingTime(for product: Product, priceHistory: [PricePoint]) async throws -> PricePrediction {
+    // MARK: - Price Prediction with Caching
+    func predictOptimalBuyingTime(for product: Product, priceHistory: [PricePoint], forceRefresh: Bool = false) async throws -> PricePrediction {
+        let cacheKey = "price_prediction_\(product.id.uuidString)"
+        
+        // Check cache first
+        if !forceRefresh,
+           let cached: PricePrediction = cacheManager.getCachedResponse(for: cacheKey, type: PricePrediction.self) {
+            return cached
+        }
+        
+        // Premium feature check
+        guard AuthenticationManager.shared.subscriptionTier == .premium else {
+            // Free users get basic prediction
+            return createBasicPricePrediction(for: product)
+        }
+        
+        try await enforceRateLimit()
+        
         let prompt = createPricePredictionPrompt(product: product, history: priceHistory)
         let response = try await sendRequest(prompt: prompt)
-        return try parsePricePrediction(from: response)
+        let prediction = try parsePricePrediction(from: response)
+        
+        // Cache the response
+        cacheManager.cacheResponse(prediction, for: cacheKey)
+        
+        return prediction
     }
     
-    // MARK: - Deal Evaluation
-    func evaluateDeal(_ deal: DealAlert, userPreferences: UserPreferences) async throws -> DealEvaluation {
+    // MARK: - Deal Evaluation with Caching
+    func evaluateDeal(_ deal: DealAlert, userPreferences: UserPreferences, forceRefresh: Bool = false) async throws -> DealEvaluation {
+        let cacheKey = "deal_evaluation_\(deal.id.uuidString)"
+        
+        // Check cache first
+        if !forceRefresh,
+           let cached: DealEvaluation = cacheManager.getCachedResponse(for: cacheKey, type: DealEvaluation.self) {
+            return cached
+        }
+        
+        // Premium users get AI evaluation, free users get basic evaluation
+        guard AuthenticationManager.shared.subscriptionTier == .premium else {
+            return createBasicDealEvaluation(deal: deal, preferences: userPreferences)
+        }
+        
+        try await enforceRateLimit()
+        
         let prompt = createDealEvaluationPrompt(deal: deal, preferences: userPreferences)
         let response = try await sendRequest(prompt: prompt)
-        return try parseDealEvaluation(from: response)
+        let evaluation = try parseDealEvaluation(from: response)
+        
+        // Cache the response
+        cacheManager.cacheResponse(evaluation, for: cacheKey)
+        
+        return evaluation
     }
     
-    // MARK: - Budget Optimization
+    // MARK: - Budget Optimization (Premium Only)
     func optimizeBudget(currentBudget: Budget, purchases: [Purchase], goals: [String]) async throws -> BudgetRecommendation {
+        guard AuthenticationManager.shared.subscriptionTier == .premium else {
+            throw ClaudeAPIError.subscriptionRequired
+        }
+        
+        let cacheKey = "budget_optimization_\(AuthenticationManager.shared.userProfile?.id ?? "default")"
+        
+        // Check cache (valid for 7 days for budget optimization)
+        if let cached: BudgetRecommendation = cacheManager.getCachedResponse(for: cacheKey, type: BudgetRecommendation.self) {
+            return cached
+        }
+        
+        try await enforceRateLimit()
+        
         let prompt = createBudgetOptimizationPrompt(budget: currentBudget, purchases: purchases, goals: goals)
         let response = try await sendRequest(prompt: prompt)
-        return try parseBudgetRecommendation(from: response)
+        let recommendation = try parseBudgetRecommendation(from: response)
+        
+        cacheManager.cacheResponse(recommendation, for: cacheKey)
+        
+        return recommendation
     }
     
     // MARK: - Product Alternative Suggestions
     func suggestAlternatives(for product: Product, priceHistory: [PricePoint]) async throws -> ProductAlternatives {
+        // Basic alternatives for free users, AI-powered for premium
+        if AuthenticationManager.shared.subscriptionTier != .premium {
+            return createBasicProductAlternatives(for: product)
+        }
+        
+        try await enforceRateLimit()
+        
         let prompt = createProductAlternativesPrompt(product: product, history: priceHistory)
         let response = try await sendRequest(prompt: prompt)
         return try parseProductAlternatives(from: response)
@@ -64,13 +159,56 @@ class ClaudeAPIService: ObservableObject {
     
     // MARK: - Smart Shopping Recommendations
     func getSmartRecommendations(items: [ShoppingListItem], budget: Budget) async throws -> SmartRecommendations {
+        guard AuthenticationManager.shared.subscriptionTier == .premium else {
+            return createBasicSmartRecommendations(items: items)
+        }
+        
+        try await enforceRateLimit()
+        
         let prompt = createSmartRecommendationsPrompt(items: items, budget: budget)
         let response = try await sendRequest(prompt: prompt)
         return try parseSmartRecommendations(from: response)
     }
     
+    // MARK: - Rate Limiting
+    private func enforceRateLimit() async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            apiCallQueue.async { [weak self] in
+                guard let self = self else {
+                    continuation.resume(throwing: ClaudeAPIError.networkError(NSError(domain: "ClaudeAPI", code: -1)))
+                    return
+                }
+                
+                // Check concurrent requests
+                if self.pendingRequests >= self.maxConcurrentRequests {
+                    continuation.resume(throwing: ClaudeAPIError.rateLimitExceeded)
+                    return
+                }
+                
+                // Check time since last call
+                if let lastCall = self.lastAPICallTime {
+                    let timeSinceLastCall = Date().timeIntervalSince(lastCall)
+                    if timeSinceLastCall < self.minimumTimeBetweenCalls {
+                        let waitTime = self.minimumTimeBetweenCalls - timeSinceLastCall
+                        Thread.sleep(forTimeInterval: waitTime)
+                    }
+                }
+                
+                self.lastAPICallTime = Date()
+                self.pendingRequests += 1
+                continuation.resume()
+            }
+        }
+    }
+    
     // MARK: - Private Methods
     private func sendRequest(prompt: String) async throws -> ClaudeResponse {
+        defer {
+            apiCallQueue.async { [weak self] in
+                self?.pendingRequests -= 1
+            }
+        }
+        
         guard !apiKey.isEmpty && apiKey != "YOUR_CLAUDE_API_KEY_HERE" else {
             throw ClaudeAPIError.missingAPIKey
         }
@@ -106,6 +244,10 @@ class ClaudeAPIService: ObservableObject {
                 throw ClaudeAPIError.invalidResponse
             }
             
+            if httpResponse.statusCode == 429 {
+                throw ClaudeAPIError.rateLimitExceeded
+            }
+            
             if httpResponse.statusCode != 200 {
                 let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
                 throw ClaudeAPIError.httpError(statusCode: httpResponse.statusCode, message: errorMessage)
@@ -119,7 +261,154 @@ class ClaudeAPIService: ObservableObject {
         }
     }
     
-    // MARK: - Prompt Creation Methods
+    // MARK: - Basic Implementations for Free Users
+    private func createBasicShoppingAnalysis(purchases: [Purchase], inventory: [InventoryItem]) -> ShoppingAnalysis {
+        var patterns: [String] = []
+        var restockingSoon: [String] = []
+        var savingsOpportunities: [ShoppingAnalysis.SavingOpportunity] = []
+        
+        // Basic pattern analysis
+        if !purchases.isEmpty {
+            patterns.append("You've made \(purchases.count) purchases recently")
+            
+            let avgSpending = purchases.reduce(0) { $0 + $1.totalAmount } / Double(purchases.count)
+            patterns.append("Average purchase amount: $\(String(format: "%.2f", avgSpending))")
+        }
+        
+        // Check inventory for restock needs
+        for item in inventory where item.needsReorder {
+            restockingSoon.append(item.product.name)
+        }
+        
+        // Basic savings opportunities
+        if restockingSoon.count > 3 {
+            savingsOpportunities.append(
+                ShoppingAnalysis.SavingOpportunity(
+                    item: "Bundle Purchase",
+                    potentialSaving: Double(restockingSoon.count) * 2.5,
+                    recommendation: "Consider buying these items together for potential bulk discounts"
+                )
+            )
+        }
+        
+        return ShoppingAnalysis(
+            patterns: patterns,
+            restockingSoon: restockingSoon,
+            savingsOpportunities: savingsOpportunities,
+            bulkRecommendations: restockingSoon.count > 5 ? ["Consider bulk purchasing for frequently used items"] : []
+        )
+    }
+    
+    private func createBasicPricePrediction(for product: Product) -> PricePrediction {
+        // Basic prediction based on category
+        let trend: String
+        let daysToWait: Int
+        
+        switch product.category {
+        case .electronics:
+            trend = "Stable"
+            daysToWait = 14
+        case .groceries, .food:
+            trend = "Volatile"
+            daysToWait = 7
+        case .clothing:
+            trend = "Seasonal"
+            daysToWait = 30
+        default:
+            trend = "Stable"
+            daysToWait = 10
+        }
+        
+        let currentPrice = product.currentLowestPrice?.price ?? 100
+        let variance = currentPrice * 0.1
+        
+        return PricePrediction(
+            trend: trend,
+            optimalBuyDate: Date().addingTimeInterval(TimeInterval(daysToWait * 86400)),
+            expectedPriceRange: PricePrediction.PriceRange(
+                min: currentPrice - variance,
+                max: currentPrice + variance
+            ),
+            confidence: 0.6
+        )
+    }
+    
+    private func createBasicDealEvaluation(deal: DealAlert, preferences: UserPreferences) -> DealEvaluation {
+        let recommendation: DealEvaluation.Recommendation
+        let score: Int
+        let reasoning: String
+        
+        if deal.discountPercentage >= preferences.priceDropThreshold * 2 {
+            recommendation = .buy
+            score = 8
+            reasoning = "Excellent discount! This exceeds your typical threshold."
+        } else if deal.discountPercentage >= preferences.priceDropThreshold {
+            recommendation = .buy
+            score = 6
+            reasoning = "Good deal that meets your discount preferences."
+        } else {
+            recommendation = .wait
+            score = 4
+            reasoning = "Discount is below your preferred threshold. Consider waiting for a better deal."
+        }
+        
+        return DealEvaluation(
+            recommendation: recommendation,
+            score: score,
+            reasoning: reasoning
+        )
+    }
+    
+    private func createBasicProductAlternatives(for product: Product) -> ProductAlternatives {
+        // Basic alternatives based on category
+        let alternatives: [ProductAlternatives.Alternative] = [
+            ProductAlternatives.Alternative(
+                name: "Generic \(product.category.rawValue) Option",
+                estimatedPrice: (product.currentLowestPrice?.price ?? 100) * 0.7,
+                reason: "Typically 30% cheaper than branded options"
+            ),
+            ProductAlternatives.Alternative(
+                name: "Store Brand Alternative",
+                estimatedPrice: (product.currentLowestPrice?.price ?? 100) * 0.8,
+                reason: "Good quality at a lower price point"
+            )
+        ]
+        
+        return ProductAlternatives(alternatives: alternatives)
+    }
+    
+    private func createBasicSmartRecommendations(items: [ShoppingListItem]) -> SmartRecommendations {
+        var recommendations: [String] = []
+        var priorityOrder: [String] = []
+        var timingAdvice: [String] = []
+        
+        // Sort by priority
+        let sortedItems = items.sorted { $0.priority.rawValue < $1.priority.rawValue }
+        priorityOrder = sortedItems.prefix(5).map { $0.product.name }
+        
+        // Basic recommendations
+        let urgentItems = items.filter { $0.priority == .urgent }
+        if !urgentItems.isEmpty {
+            recommendations.append("Focus on \(urgentItems.count) urgent items first")
+        }
+        
+        let trackingItems = items.filter { $0.isTracking }
+        if trackingItems.count < items.count / 2 {
+            recommendations.append("Enable price tracking on more items to maximize savings")
+        }
+        
+        // Basic timing advice
+        timingAdvice.append("Weekend mornings often have the best online deals")
+        timingAdvice.append("Check for coupons before purchasing")
+        
+        return SmartRecommendations(
+            recommendations: recommendations,
+            priorityOrder: priorityOrder,
+            timingAdvice: timingAdvice
+        )
+    }
+    
+    // MARK: - Prompt Creation Methods (unchanged)
     private func createShoppingAnalysisPrompt(purchases: [Purchase], inventory: [InventoryItem]) -> String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .medium
@@ -316,6 +605,8 @@ enum ClaudeAPIError: LocalizedError {
     case parsingError(String)
     case encodingError(Error)
     case networkError(Error)
+    case rateLimitExceeded
+    case subscriptionRequired
     
     var errorDescription: String? {
         switch self {
@@ -333,6 +624,10 @@ enum ClaudeAPIError: LocalizedError {
             return "Failed to encode request: \(error.localizedDescription)"
         case .networkError(let error):
             return "Network error: \(error.localizedDescription)"
+        case .rateLimitExceeded:
+            return "API rate limit exceeded. Please try again later."
+        case .subscriptionRequired:
+            return "This feature requires a premium subscription."
         }
     }
 }

@@ -2,6 +2,11 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var selectedTab = 0
+    @State private var showingAddItem = false
+    @State private var showingPriceCheck = false
+    @State private var showingAIInsights = false
+    @State private var showingAlerts = false
+    
     @EnvironmentObject var authManager: AuthenticationManager
     @EnvironmentObject var userPreferences: UserPreferencesManager
     @EnvironmentObject var notificationService: NotificationService
@@ -10,11 +15,16 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             // Home Dashboard
-            HomeDashboardView()
-                .tabItem {
-                    Label("Home", systemImage: "house.fill")
-                }
-                .tag(0)
+            HomeDashboardView(
+                showingAddItem: $showingAddItem,
+                showingPriceCheck: $showingPriceCheck,
+                showingAIInsights: $showingAIInsights,
+                showingAlerts: $showingAlerts
+            )
+            .tabItem {
+                Label("Home", systemImage: "house.fill")
+            }
+            .tag(0)
             
             // Shopping List
             NavigationView {
@@ -64,6 +74,26 @@ struct MainTabView: View {
                 selectedTab = 1 // Shopping tab
             }
         }
+        .sheet(isPresented: $showingAddItem) {
+            NavigationView {
+                AddItemView(viewModel: ShoppingListViewModel())
+            }
+        }
+        .sheet(isPresented: $showingPriceCheck) {
+            NavigationView {
+                PriceCheckView()
+            }
+        }
+        .sheet(isPresented: $showingAIInsights) {
+            NavigationView {
+                AIInsightsView()
+            }
+        }
+        .sheet(isPresented: $showingAlerts) {
+            NavigationView {
+                AlertsManagementView()
+            }
+        }
     }
 }
 
@@ -73,6 +103,11 @@ struct HomeDashboardView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @EnvironmentObject var userPreferences: UserPreferencesManager
     @EnvironmentObject var notificationService: NotificationService
+    
+    @Binding var showingAddItem: Bool
+    @Binding var showingPriceCheck: Bool
+    @Binding var showingAIInsights: Bool
+    @Binding var showingAlerts: Bool
     
     var body: some View {
         NavigationView {
@@ -123,9 +158,14 @@ struct HomeDashboardView: View {
                     )
                     .padding(.horizontal)
                     
-                    // Quick Actions
-                    QuickActionsSection()
-                        .padding(.horizontal)
+                    // Quick Actions - NOW FUNCTIONAL
+                    QuickActionsSection(
+                        showingAddItem: $showingAddItem,
+                        showingPriceCheck: $showingPriceCheck,
+                        showingAIInsights: $showingAIInsights,
+                        showingAlerts: $showingAlerts
+                    )
+                    .padding(.horizontal)
                     
                     // AI Recommendations
                     if !viewModel.recommendations.isEmpty {
@@ -154,6 +194,10 @@ struct HomeDashboardView: View {
                                     HStack(spacing: 12) {
                                         ForEach(viewModel.recommendations) { recommendation in
                                             RecommendationCard(recommendation: recommendation)
+                                                .onTapGesture {
+                                                    viewModel.selectedRecommendation = recommendation
+                                                    viewModel.showingRecommendationDetail = true
+                                                }
                                         }
                                     }
                                     .padding(.horizontal)
@@ -194,7 +238,10 @@ struct HomeDashboardView: View {
                             
                             VStack(spacing: 10) {
                                 ForEach(viewModel.recentPriceDrops.prefix(3)) { alert in
-                                    PriceDropRow(alert: alert)
+                                    NavigationLink(destination: DealDetailView(deal: alert, viewModel: DealsViewModel())) {
+                                        PriceDropRow(alert: alert)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
                                 }
                             }
                             .padding(.horizontal)
@@ -218,10 +265,20 @@ struct HomeDashboardView: View {
                             VStack(spacing: 8) {
                                 ForEach(viewModel.lowStockItems.prefix(3)) { item in
                                     LowStockRow(item: item)
+                                        .onTapGesture {
+                                            viewModel.selectedInventoryItem = item
+                                            viewModel.showingInventoryDetail = true
+                                        }
                                 }
                             }
                             .padding(.horizontal)
                         }
+                    }
+                    
+                    // Batch Processing Status (Premium Only)
+                    if authManager.subscriptionTier == .premium {
+                        BatchProcessingStatusCard()
+                            .padding(.horizontal)
                     }
                 }
                 .padding(.vertical)
@@ -242,6 +299,16 @@ struct HomeDashboardView: View {
         .sheet(isPresented: $viewModel.showUpgrade) {
             SubscriptionDetailsView()
                 .environmentObject(authManager)
+        }
+        .sheet(isPresented: $viewModel.showingRecommendationDetail) {
+            if let recommendation = viewModel.selectedRecommendation {
+                RecommendationDetailView(recommendation: recommendation)
+            }
+        }
+        .sheet(isPresented: $viewModel.showingInventoryDetail) {
+            if let item = viewModel.selectedInventoryItem {
+                InventoryDetailView(item: item, viewModel: InventoryViewModel())
+            }
         }
     }
     
@@ -349,9 +416,11 @@ struct SavingsSummaryCard: View {
             
             Spacer()
             
-            Image(systemName: "chart.line.uptrend.xyaxis")
-                .foregroundColor(.blue)
-                .font(.title2)
+            NavigationLink(destination: AnalyticsView()) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .foregroundColor(.blue)
+                    .font(.title2)
+            }
         }
         .padding()
         .background(Color(.systemGray6))
@@ -360,6 +429,11 @@ struct SavingsSummaryCard: View {
 }
 
 struct QuickActionsSection: View {
+    @Binding var showingAddItem: Bool
+    @Binding var showingPriceCheck: Bool
+    @Binding var showingAIInsights: Bool
+    @Binding var showingAlerts: Bool
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Quick Actions")
@@ -371,7 +445,7 @@ struct QuickActionsSection: View {
                     title: "Add Item",
                     color: .blue
                 ) {
-                    // Navigate to add item
+                    showingAddItem = true
                 }
                 
                 QuickActionButton(
@@ -379,7 +453,7 @@ struct QuickActionsSection: View {
                     title: "Price Check",
                     color: .green
                 ) {
-                    // Navigate to price check
+                    showingPriceCheck = true
                 }
                 
                 QuickActionButton(
@@ -387,7 +461,7 @@ struct QuickActionsSection: View {
                     title: "AI Insights",
                     color: .purple
                 ) {
-                    // Show AI insights
+                    showingAIInsights = true
                 }
                 
                 QuickActionButton(
@@ -395,7 +469,7 @@ struct QuickActionsSection: View {
                     title: "Alerts",
                     color: .orange
                 ) {
-                    // Show alerts
+                    showingAlerts = true
                 }
             }
         }
@@ -577,6 +651,651 @@ struct LowStockRow: View {
     }
 }
 
+struct BatchProcessingStatusCard: View {
+    @State private var lastBatchProcessingTime: Date? = APICacheManager.shared.lastBatchProcessingTime
+    @State private var nextScheduledTime: Date? = APICacheManager.shared.nextScheduledBatchTime
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "gearshape.2")
+                    .foregroundColor(.purple)
+                Text("AI Processing Status")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                Spacer()
+                Text("Premium")
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.purple.opacity(0.2))
+                    .foregroundColor(.purple)
+                    .cornerRadius(4)
+            }
+            
+            HStack {
+                if let lastTime = lastBatchProcessingTime {
+                    Text("Last update: \(lastTime, style: .relative)")
+                } else {
+                    Text("No batch processing yet")
+                }
+                
+                Spacer()
+                
+                if let nextTime = nextScheduledTime {
+                    Text("Next: \(nextTime, style: .relative)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .font(.caption)
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(8)
+    }
+}
+
+// MARK: - New Views for Quick Actions
+
+struct PriceCheckView: View {
+    @State private var searchText = ""
+    @State private var scannedBarcode = ""
+    @State private var isScanning = false
+    @State private var searchResults: [Product] = []
+    @State private var isSearching = false
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        VStack {
+            // Search Bar
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.gray)
+                TextField("Search product or enter barcode...", text: $searchText)
+                    .onSubmit {
+                        searchProduct()
+                    }
+                
+                Button(action: { isScanning = true }) {
+                    Image(systemName: "barcode.viewfinder")
+                        .foregroundColor(.blue)
+                }
+            }
+            .padding()
+            .background(Color(.systemGray6))
+            .cornerRadius(10)
+            .padding()
+            
+            if isSearching {
+                ProgressView("Searching...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if searchResults.isEmpty {
+                VStack(spacing: 20) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 60))
+                        .foregroundColor(.gray)
+                    
+                    Text("Search for any product")
+                        .font(.headline)
+                        .foregroundColor(.gray)
+                    
+                    Text("Enter a product name or scan a barcode to check prices across all retailers")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(searchResults) { product in
+                    ProductPriceRow(product: product)
+                }
+            }
+        }
+        .navigationTitle("Price Check")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Done") { dismiss() }
+            }
+        }
+        .sheet(isPresented: $isScanning) {
+            BarcodeScannerView(scannedCode: $scannedBarcode)
+                .onDisappear {
+                    if !scannedBarcode.isEmpty {
+                        searchText = scannedBarcode
+                        searchProduct()
+                    }
+                }
+        }
+    }
+    
+    private func searchProduct() {
+        isSearching = true
+        
+        // Simulate search
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            // Mock results
+            searchResults = [
+                Product(
+                    name: searchText,
+                    description: "Search result",
+                    category: .other,
+                    imageURL: nil,
+                    barcode: scannedBarcode.isEmpty ? nil : scannedBarcode,
+                    brand: "Various"
+                )
+            ]
+            isSearching = false
+        }
+    }
+}
+
+struct BarcodeScannerView: View {
+    @Binding var scannedCode: String
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        VStack {
+            Text("Barcode Scanner")
+                .font(.title2)
+                .fontWeight(.bold)
+                .padding()
+            
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemGray6))
+                .frame(height: 300)
+                .overlay(
+                    VStack {
+                        Image(systemName: "barcode.viewfinder")
+                            .font(.system(size: 60))
+                            .foregroundColor(.gray)
+                        Text("Camera view would appear here")
+                            .foregroundColor(.gray)
+                    }
+                )
+                .padding()
+            
+            Text("Point camera at barcode")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            
+            // Mock scan button for demo
+            Button("Simulate Scan") {
+                scannedCode = "123456789012"
+                dismiss()
+            }
+            .buttonStyle(.borderedProminent)
+            .padding()
+            
+            Spacer()
+        }
+    }
+}
+
+struct ProductPriceRow: View {
+    let product: Product
+    @State private var priceData: [PricePoint] = []
+    @State private var isLoading = true
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(product.name)
+                .font(.headline)
+            
+            if isLoading {
+                HStack {
+                    ProgressView()
+                    Text("Checking prices...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.vertical)
+            } else {
+                ForEach(priceData) { price in
+                    HStack {
+                        Text(price.retailer.name)
+                            .font(.subheadline)
+                        
+                        Spacer()
+                        
+                        VStack(alignment: .trailing) {
+                            Text("$\(price.totalPrice, specifier: "%.2f")")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                            
+                            if price.inStock {
+                                Text("In Stock")
+                                    .font(.caption)
+                                    .foregroundColor(.green)
+                            } else {
+                                Text("Out of Stock")
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .onAppear {
+            loadPrices()
+        }
+    }
+    
+    private func loadPrices() {
+        // Simulate price loading
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            priceData = Retailer.allRetailers.map { retailer in
+                PricePoint(
+                    retailer: retailer,
+                    price: Double.random(in: 50...200),
+                    timestamp: Date(),
+                    url: retailer.websiteURL,
+                    inStock: Bool.random(),
+                    shippingCost: Bool.random() ? nil : Double.random(in: 5...15)
+                )
+            }
+            isLoading = false
+        }
+    }
+}
+
+struct AIInsightsView: View {
+    @StateObject private var viewModel = AIInsightsViewModel()
+    @EnvironmentObject var authManager: AuthenticationManager
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                if authManager.subscriptionTier == .premium {
+                    // Shopping Patterns
+                    InsightSection(
+                        title: "Shopping Patterns",
+                        icon: "chart.xyaxis.line",
+                        loading: viewModel.isLoadingPatterns
+                    ) {
+                        if let analysis = viewModel.shoppingAnalysis {
+                            ForEach(analysis.patterns, id: \.self) { pattern in
+                                InsightRow(text: pattern)
+                            }
+                        }
+                    }
+                    
+                    // Savings Opportunities
+                    InsightSection(
+                        title: "Savings Opportunities",
+                        icon: "dollarsign.circle",
+                        loading: viewModel.isLoadingOpportunities
+                    ) {
+                        if let analysis = viewModel.shoppingAnalysis {
+                            ForEach(analysis.savingsOpportunities, id: \.item) { opportunity in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(opportunity.item)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    Text(opportunity.recommendation)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text("Save ~$\(opportunity.potentialSaving, specifier: "%.2f")")
+                                        .font(.caption)
+                                        .foregroundColor(.green)
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+                    }
+                    
+                    // Budget Optimization
+                    InsightSection(
+                        title: "Budget Optimization",
+                        icon: "chart.pie",
+                        loading: viewModel.isLoadingBudget
+                    ) {
+                        if let recommendation = viewModel.budgetRecommendation {
+                            ForEach(recommendation.recommendations, id: \.self) { rec in
+                                InsightRow(text: rec)
+                            }
+                        }
+                    }
+                } else {
+                    // Free user prompt
+                    VStack(spacing: 20) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 60))
+                            .foregroundColor(.purple)
+                        
+                        Text("AI Insights")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Text("Get personalized shopping insights powered by Claude AI")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            FeatureRow(icon: "chart.xyaxis.line", text: "Shopping pattern analysis")
+                            FeatureRow(icon: "dollarsign.circle", text: "Personalized savings recommendations")
+                            FeatureRow(icon: "calendar", text: "Optimal buying time predictions")
+                            FeatureRow(icon: "chart.pie", text: "Budget optimization strategies")
+                        }
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                        
+                        Button("Upgrade to Premium") {
+                            dismiss()
+                            // Show upgrade sheet
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .padding()
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("AI Insights")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Done") { dismiss() }
+            }
+        }
+        .onAppear {
+            if authManager.subscriptionTier == .premium {
+                viewModel.loadInsights()
+            }
+        }
+    }
+}
+
+struct InsightSection<Content: View>: View {
+    let title: String
+    let icon: String
+    let loading: Bool
+    @ViewBuilder let content: () -> Content
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(.purple)
+                Text(title)
+                    .font(.headline)
+                Spacer()
+            }
+            
+            if loading {
+                HStack {
+                    ProgressView()
+                    Text("Analyzing...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.vertical)
+            } else {
+                content()
+            }
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+}
+
+struct InsightRow: View {
+    let text: String
+    
+    var body: some View {
+        HStack {
+            Circle()
+                .fill(Color.purple.opacity(0.2))
+                .frame(width: 6, height: 6)
+            Text(text)
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+struct FeatureRow: View {
+    let icon: String
+    let text: String
+    
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(.purple)
+                .frame(width: 30)
+            Text(text)
+                .font(.subheadline)
+            Spacer()
+        }
+    }
+}
+
+struct AlertsManagementView: View {
+    @EnvironmentObject var notificationService: NotificationService
+    @EnvironmentObject var priceTrackingService: PriceTrackingService
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        List {
+            Section("Active Price Alerts") {
+                if priceTrackingService.priceAlerts.isEmpty {
+                    Text("No active price alerts")
+                        .foregroundColor(.secondary)
+                } else {
+                    ForEach(priceTrackingService.priceAlerts.filter { !$0.isRead }) { alert in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(alert.product.name)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text(alert.message)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(alert.timestamp, style: .relative)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+            
+            Section("Tracking Items") {
+                ForEach(priceTrackingService.trackingItems) { item in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(item.product.name)
+                                .font(.subheadline)
+                            if let targetPrice = item.targetPrice {
+                                Text("Target: $\(targetPrice, specifier: "%.2f")")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        Toggle("", isOn: .constant(item.isActive))
+                            .labelsHidden()
+                    }
+                }
+            }
+            
+            Section {
+                Button("Clear Read Alerts") {
+                    priceTrackingService.clearReadAlerts()
+                }
+                .foregroundColor(.red)
+            }
+        }
+        .navigationTitle("Alerts Management")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Done") { dismiss() }
+            }
+        }
+    }
+}
+
+struct RecommendationDetailView: View {
+    let recommendation: AIRecommendation
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Product Info
+                    VStack(alignment: .center) {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(LinearGradient(
+                                colors: [.blue.opacity(0.3), .purple.opacity(0.3)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ))
+                            .frame(height: 200)
+                            .overlay(
+                                VStack {
+                                    Image(systemName: recommendation.product.category.icon)
+                                        .font(.system(size: 60))
+                                        .foregroundColor(.white)
+                                    Text(recommendation.product.category.rawValue)
+                                        .foregroundColor(.white.opacity(0.8))
+                                }
+                            )
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(recommendation.product.name)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Label(recommendation.type.rawValue, systemImage: "sparkles")
+                            .font(.subheadline)
+                            .foregroundColor(.purple)
+                    }
+                    .padding(.horizontal)
+                    
+                    // Recommendation Details
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Why This Recommendation")
+                            .font(.headline)
+                        
+                        Text(recommendation.reason)
+                            .font(.subheadline)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .padding(.horizontal)
+                    
+                    // Potential Savings
+                    if let savings = recommendation.potentialSavings {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text("Potential Savings")
+                                    .font(.headline)
+                                Text("Based on historical data")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Text("$\(savings, specifier: "%.2f")")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.green)
+                        }
+                        .padding()
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(12)
+                        .padding(.horizontal)
+                    }
+                    
+                    // Best Time to Buy
+                    if let dateRange = recommendation.bestTimeToBuy {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Optimal Purchase Window")
+                                .font(.headline)
+                            
+                            Text(dateRange.description)
+                                .font(.subheadline)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(8)
+                        }
+                        .padding(.horizontal)
+                    }
+                    
+                    // Alternative Products
+                    if !recommendation.alternativeProducts.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Alternative Options")
+                                .font(.headline)
+                                .padding(.horizontal)
+                            
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    ForEach(recommendation.alternativeProducts) { alternative in
+                                        VStack(alignment: .leading) {
+                                            Text(alternative.name)
+                                                .font(.subheadline)
+                                                .fontWeight(.medium)
+                                            Text("Save more")
+                                                .font(.caption)
+                                                .foregroundColor(.green)
+                                        }
+                                        .padding()
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(8)
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
+                    }
+                    
+                    // Actions
+                    VStack(spacing: 12) {
+                        Button(action: { /* Add to shopping list */ }) {
+                            Label("Add to Shopping List", systemImage: "cart.badge.plus")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        
+                        Button(action: { /* Start tracking */ }) {
+                            Label("Track Price", systemImage: "chart.line.uptrend.xyaxis")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Recommendation")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Notifications View
 struct NotificationsView: View {
     @EnvironmentObject var notificationService: NotificationService
@@ -610,6 +1329,7 @@ struct NotificationsView: View {
                     Button("Clear All") {
                         notificationService.removeAllNotifications()
                     }
+                    .disabled(notificationService.deliveredNotifications.isEmpty)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -627,7 +1347,7 @@ struct NotificationsView: View {
     }
 }
 
-// MARK: - View Model
+// MARK: - View Models
 class HomeDashboardViewModel: ObservableObject {
     @Published var dailyDigest: DailyDigest?
     @Published var monthlySavings: Double = 0
@@ -637,6 +1357,10 @@ class HomeDashboardViewModel: ObservableObject {
     @Published var lowStockItems: [InventoryItem] = []
     @Published var showNotifications = false
     @Published var showUpgrade = false
+    @Published var showingRecommendationDetail = false
+    @Published var selectedRecommendation: AIRecommendation?
+    @Published var showingInventoryDetail = false
+    @Published var selectedInventoryItem: InventoryItem?
     
     private let claudeService = ClaudeAPIService.shared
     
@@ -679,11 +1403,14 @@ class HomeDashboardViewModel: ObservableObject {
                     barcode: nil,
                     brand: "Instant Pot"
                 ),
-                reason: "Based on your cooking habits",
+                reason: "Based on your cooking habits and frequent grocery purchases, this could save you time and money on meal prep",
                 confidenceScore: 0.85,
                 potentialSavings: 35.00,
                 alternativeProducts: [],
-                bestTimeToBuy: nil,
+                bestTimeToBuy: AIRecommendation.DateRange(
+                    start: Date(),
+                    end: Date().addingTimeInterval(7 * 86400)
+                ),
                 createdAt: Date(),
                 type: .priceDrop
             ),
@@ -696,7 +1423,7 @@ class HomeDashboardViewModel: ObservableObject {
                     barcode: nil,
                     brand: "Nature Made"
                 ),
-                reason: "Price dropped 30% below average",
+                reason: "Price dropped 30% below 90-day average. Perfect time to stock up on your regularly purchased vitamins",
                 confidenceScore: 0.92,
                 potentialSavings: 12.50,
                 alternativeProducts: [],
@@ -754,12 +1481,109 @@ class HomeDashboardViewModel: ObservableObject {
     }
 }
 
+class AIInsightsViewModel: ObservableObject {
+    @Published var shoppingAnalysis: ShoppingAnalysis?
+    @Published var budgetRecommendation: BudgetRecommendation?
+    @Published var isLoadingPatterns = false
+    @Published var isLoadingOpportunities = false
+    @Published var isLoadingBudget = false
+    
+    private let claudeService = ClaudeAPIService.shared
+    
+    func loadInsights() {
+        loadShoppingPatterns()
+        loadBudgetOptimization()
+    }
+    
+    private func loadShoppingPatterns() {
+        isLoadingPatterns = true
+        isLoadingOpportunities = true
+        
+        Task {
+            do {
+                // Mock data for now
+                let purchases: [Purchase] = []
+                let inventory: [InventoryItem] = []
+                
+                let analysis = try await claudeService.analyzeShoppingPattern(
+                    purchases: purchases,
+                    inventory: inventory
+                )
+                
+                await MainActor.run {
+                    self.shoppingAnalysis = analysis
+                    self.isLoadingPatterns = false
+                    self.isLoadingOpportunities = false
+                }
+            } catch {
+                print("Error loading shopping patterns: \(error)")
+                await MainActor.run {
+                    self.isLoadingPatterns = false
+                    self.isLoadingOpportunities = false
+                }
+            }
+        }
+    }
+    
+    private func loadBudgetOptimization() {
+        isLoadingBudget = true
+        
+        Task {
+            do {
+                let budget = Budget(
+                    monthlyLimit: 1000,
+                    categories: [:],
+                    currentMonthSpending: 750,
+                    alerts: []
+                )
+                
+                let recommendation = try await claudeService.optimizeBudget(
+                    currentBudget: budget,
+                    purchases: [],
+                    goals: ["Save for vacation", "Reduce grocery spending"]
+                )
+                
+                await MainActor.run {
+                    self.budgetRecommendation = recommendation
+                    self.isLoadingBudget = false
+                }
+            } catch {
+                print("Error loading budget optimization: \(error)")
+                await MainActor.run {
+                    self.isLoadingBudget = false
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Supporting Models
 struct DailyDigest {
     let dealCount: Int
     let totalSavings: Double
     let urgentDeals: Int
     let restockReminders: Int
+}
+
+// MARK: - APICacheManager Extension
+extension APICacheManager {
+    var lastBatchProcessingTime: Date? {
+        UserDefaults.standard.object(forKey: "LastBatchProcessingTime") as? Date
+    }
+    
+    var nextScheduledBatchTime: Date? {
+        guard let lastTime = lastBatchProcessingTime else {
+            // If never run, schedule for 3 AM tomorrow
+            let calendar = Calendar.current
+            var components = calendar.dateComponents([.year, .month, .day], from: Date())
+            components.hour = 3
+            components.minute = 0
+            return calendar.date(byAdding: .day, value: 1, to: calendar.date(from: components)!)
+        }
+        
+        // Next run is 24 hours after last run
+        return lastTime.addingTimeInterval(86400)
+    }
 }
 
 #Preview {
