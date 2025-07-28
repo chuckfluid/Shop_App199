@@ -1,5 +1,4 @@
 import SwiftUI
-import UserNotifications
 
 @main
 struct ShopSenseAIApp: App {
@@ -7,7 +6,12 @@ struct ShopSenseAIApp: App {
     @StateObject private var userPreferences = UserPreferencesManager.shared
     @StateObject private var notificationService = NotificationService.shared
     @StateObject private var priceTrackingService = PriceTrackingService.shared
-    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @State private var showingOnboarding = false
+    
+    init() {
+        setupAppearance()
+        setupServices()
+    }
     
     var body: some Scene {
         WindowGroup {
@@ -17,393 +21,340 @@ struct ShopSenseAIApp: App {
                 .environmentObject(notificationService)
                 .environmentObject(priceTrackingService)
                 .onAppear {
-                    if hasCompletedOnboarding {
-                        setupAppServices()
-                    }
+                    checkFirstLaunch()
+                    requestNotificationPermission()
+                }
+                .sheet(isPresented: $showingOnboarding) {
+                    OnboardingView(isPresented: $showingOnboarding)
+                        .environmentObject(authManager)
                 }
         }
     }
     
-    private func setupAppServices() {
-        // Setup notification categories
-        notificationService.setupNotificationCategories()
+    private func setupAppearance() {
+        // Configure global appearance
+        UINavigationBar.appearance().largeTitleTextAttributes = [
+            .foregroundColor: UIColor.label
+        ]
         
-        // Setup notification observers
-        setupNotificationObservers()
+        UINavigationBar.appearance().titleTextAttributes = [
+            .foregroundColor: UIColor.label
+        ]
         
-        // Update notification settings based on user preferences
-        notificationService.updateNotificationSettings(with: userPreferences)
-        
-        // Start price tracking if user has tracking items
-        print("🚀 ShopSense AI services initialized")
+        UITabBar.appearance().backgroundColor = UIColor.systemBackground
     }
     
-    private func setupNotificationObservers() {
-        // Handle navigation from notifications
-        NotificationCenter.default.addObserver(
-            forName: .navigateToProduct,
-            object: nil,
-            queue: .main
-        ) { notification in
-            if let productId = notification.userInfo?["productId"] as? String {
-                // Handle navigation to specific product
-                print("Navigate to product: \(productId)")
-            }
-        }
+    private func setupServices() {
+        // Initialize services
+        _ = APICacheManager.shared
+        _ = ClaudeAPIService.shared
         
-        NotificationCenter.default.addObserver(
-            forName: .navigateToDeals,
-            object: nil,
-            queue: .main
-        ) { _ in
-            // Handle navigation to deals tab
-            print("Navigate to deals")
+        // Setup notification categories
+        notificationService.updateNotificationSettings(with: userPreferences)
+    }
+    
+    private func checkFirstLaunch() {
+        let hasLaunchedBefore = UserDefaults.standard.bool(forKey: "hasLaunchedBefore")
+        if !hasLaunchedBefore {
+            showingOnboarding = true
+            UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
         }
-        
-        NotificationCenter.default.addObserver(
-            forName: .navigateToInventory,
-            object: nil,
-            queue: .main
-        ) { notification in
-            // Handle navigation to inventory
-            print("Navigate to inventory")
-        }
+    }
+    
+    private func requestNotificationPermission() {
+        notificationService.requestAuthorization()
     }
 }
 
-// MARK: - Content View
 struct ContentView: View {
-    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @EnvironmentObject var authManager: AuthenticationManager
-    @EnvironmentObject var userPreferences: UserPreferencesManager
-    @EnvironmentObject var notificationService: NotificationService
-    @EnvironmentObject var priceTrackingService: PriceTrackingService
     
     var body: some View {
-        Group {
-            if !hasCompletedOnboarding {
-                OnboardingView()
-            } else {
-                MainTabView()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didFinishLaunchingNotification)) { _ in
-            setupApp()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-            Task {
-                await refreshAppData()
-            }
-        }
-    }
-    
-    private func setupApp() {
-        // Setup notification categories
-        notificationService.setupNotificationCategories()
-        
-        // Setup notification observers for navigation
-        setupNotificationObservers()
-        
-        if hasCompletedOnboarding {
-            setupAppServices()
-        }
-    }
-    
-    private func setupAppServices() {
-        // Update notification settings based on user preferences
-        notificationService.updateNotificationSettings(with: userPreferences)
-        
-        // Start price tracking if user has tracking items
-        print("🚀 ShopSense AI services initialized")
-    }
-    
-    private func refreshAppData() async {
-        // Refresh notification status
-        await notificationService.getPendingNotifications()
-        await notificationService.getDeliveredNotifications()
-        
-        // Update badge count
-        let delivered = await notificationService.getDeliveredNotifications()
-        notificationService.updateBadgeCount(delivered.count)
-    }
-    
-    private func setupNotificationObservers() {
-        // Handle navigation from notifications
-        NotificationCenter.default.addObserver(
-            forName: .navigateToProduct,
-            object: nil,
-            queue: .main
-        ) { notification in
-            if let productId = notification.userInfo?["productId"] as? String {
-                // Handle navigation to specific product
-                print("Navigate to product: \(productId)")
-            }
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .navigateToDeals,
-            object: nil,
-            queue: .main
-        ) { _ in
-            // Handle navigation to deals tab
-            print("Navigate to deals")
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .navigateToInventory,
-            object: nil,
-            queue: .main
-        ) { notification in
-            // Handle navigation to inventory
-            print("Navigate to inventory")
+        if authManager.isSignedIn {
+            MainTabView()
+        } else {
+            SignInView()
         }
     }
 }
 
-// MARK: - Analytics View
-struct AnalyticsView: View {
-    @EnvironmentObject var userPreferences: UserPreferencesManager
-    @State private var totalSavings: Double = 1247.89
-    @State private var monthlyAverage: Double = 156.78
-    @State private var dealsFound: Int = 47
-    @State private var showingUpgradeSheet = false
+// MARK: - Sign In View
+struct SignInView: View {
+    @EnvironmentObject var authManager: AuthenticationManager
+    @State private var email = ""
+    @State private var password = ""
+    @State private var isLoading = false
+    @State private var showingError = false
+    @State private var errorMessage = ""
+    @State private var showingSignUp = false
     
     var body: some View {
         NavigationView {
-            ScrollView {
+            VStack(spacing: 30) {
+                // Logo
+                VStack(spacing: 16) {
+                    Image(systemName: "cart.fill.badge.plus")
+                        .font(.system(size: 80))
+                        .foregroundColor(.blue)
+                    
+                    Text("ShopSense AI")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                    
+                    Text("Smart Shopping, Maximum Savings")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 60)
+                
+                // Sign In Form
                 VStack(spacing: 20) {
-                    // Header
-                    VStack(spacing: 8) {
-                        Text("Your Savings")
-                            .font(.title2)
-                            .fontWeight(.bold)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Email")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                         
-                        Text("Track your smart shopping wins")
+                        TextField("Enter your email", text: $email)
+                            .textFieldStyle(RoundedTextFieldStyle())
+                            .keyboardType(.emailAddress)
+                            .autocapitalization(.none)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Password")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        SecureField("Enter your password", text: $password)
+                            .textFieldStyle(RoundedTextFieldStyle())
+                    }
+                    
+                    Button(action: signIn) {
+                        if isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Text("Sign In")
+                                .fontWeight(.semibold)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                    .disabled(isLoading || email.isEmpty || password.isEmpty)
+                }
+                .padding(.horizontal, 30)
+                
+                // Additional Options
+                VStack(spacing: 16) {
+                    Button("Forgot Password?") {
+                        // Handle forgot password
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.blue)
+                    
+                    HStack {
+                        Text("Don't have an account?")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                    }
-                    .padding(.top)
-                    
-                    // Savings Summary Cards
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                        SavingsCard(
-                            title: "Total Saved",
-                            value: String(format: "$%.2f", totalSavings),
-                            icon: "dollarsign.circle.fill",
-                            color: .green
-                        )
                         
-                        SavingsCard(
-                            title: "This Month",
-                            value: String(format: "$%.2f", monthlyAverage),
-                            icon: "calendar",
-                            color: .blue
-                        )
-                        
-                        SavingsCard(
-                            title: "Deals Found",
-                            value: "\(dealsFound)",
-                            icon: "tag.fill",
-                            color: .orange
-                        )
-                        
-                        SavingsCard(
-                            title: "Avg per Deal",
-                            value: String(format: "$%.2f", totalSavings / Double(dealsFound)),
-                            icon: "chart.bar.fill",
-                            color: .purple
-                        )
-                    }
-                    .padding(.horizontal)
-                    
-                    // Chart Placeholder
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Savings Over Time")
-                            .font(.headline)
-                            .padding(.horizontal)
-                        
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(.systemGray6))
-                            .frame(height: 200)
-                            .overlay(
-                                VStack {
-                                    Image(systemName: "chart.line.uptrend.xyaxis")
-                                        .font(.system(size: 40))
-                                        .foregroundColor(.gray)
-                                    Text("Savings chart coming soon")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
-                            )
-                            .padding(.horizontal)
-                    }
-                    
-                    // AI Insights Section
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack {
-                            Image(systemName: "sparkles")
-                                .foregroundColor(.purple)
-                            Text("AI Insights")
-                                .font(.headline)
+                        Button("Sign Up") {
+                            showingSignUp = true
                         }
-                        .padding(.horizontal)
-                        
-                        VStack(spacing: 12) {
-                            InsightCard(
-                                icon: "lightbulb.fill",
-                                title: "Smart Timing",
-                                description: "You save 23% more when you buy electronics on Tuesdays",
-                                color: .yellow
-                            )
-                            
-                            InsightCard(
-                                icon: "arrow.down.circle.fill",
-                                title: "Price Pattern",
-                                description: "Household items in your list typically drop 15% in early months",
-                                color: .blue
-                            )
-                            
-                            InsightCard(
-                                icon: "target",
-                                title: "Goal Progress",
-                                description: "You're 78% towards your monthly savings goal of $200",
-                                color: .green
-                            )
-                        }
-                        .padding(.horizontal)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.blue)
                     }
-                    
-                    // Upgrade CTA for Free Users
-                    if AuthenticationManager.shared.subscriptionTier == .free {
-                        VStack(spacing: 12) {
-                            Text("Get More Insights")
-                                .font(.headline)
-                            
-                            Text("Upgrade to Premium for advanced analytics and AI-powered shopping recommendations")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                            
-                            Button("Upgrade to Premium") {
-                                showingUpgradeSheet = true
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                        .padding(.horizontal)
-                    }
-                    
-                    Spacer(minLength: 100)
+                }
+                
+                Spacer()
+                
+                // Demo Mode
+                Button(action: signInAsGuest) {
+                    Text("Continue as Guest")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.bottom, 30)
+            }
+            .navigationBarHidden(true)
+            .alert("Error", isPresented: $showingError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
+            .sheet(isPresented: $showingSignUp) {
+                SignUpView()
+                    .environmentObject(authManager)
+            }
+        }
+    }
+    
+    private func signIn() {
+        isLoading = true
+        
+        Task {
+            do {
+                try await authManager.signIn(email: email, password: password)
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    showingError = true
+                    isLoading = false
                 }
             }
-            .navigationTitle("Analytics")
-            .refreshable {
-                // Refresh analytics data
-                await refreshAnalytics()
-            }
-        }
-        .sheet(isPresented: $showingUpgradeSheet) {
-            SubscriptionDetailsView()
-                .environmentObject(AuthenticationManager.shared)
         }
     }
     
-    private func refreshAnalytics() async {
-        // Simulate data refresh
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
-        
-        // Update with fresh data
-        totalSavings = Double.random(in: 1000...2000)
-        monthlyAverage = Double.random(in: 100...300)
-        dealsFound = Int.random(in: 30...60)
+    private func signInAsGuest() {
+        // Sign in with demo account
+        email = "demo@shopsenseai.com"
+        password = "demo123"
+        signIn()
     }
 }
 
-// MARK: - Supporting Analytics Views
-struct SavingsCard: View {
-    let title: String
-    let value: String
-    let icon: String
-    let color: Color
+// MARK: - Sign Up View
+struct SignUpView: View {
+    @EnvironmentObject var authManager: AuthenticationManager
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var name = ""
+    @State private var email = ""
+    @State private var password = ""
+    @State private var confirmPassword = ""
+    @State private var agreedToTerms = false
+    @State private var isLoading = false
+    @State private var showingError = false
+    @State private var errorMessage = ""
     
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(color)
-            
-            Text(value)
-                .font(.title3)
-                .fontWeight(.bold)
-            
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-    }
-}
-
-struct InsightCard: View {
-    let icon: String
-    let title: String
-    let description: String
-    let color: Color
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundColor(color)
-                .frame(width: 30)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+        NavigationView {
+            VStack(spacing: 20) {
+                // Header
+                VStack(spacing: 8) {
+                    Text("Create Account")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                    
+                    Text("Start saving with AI-powered shopping")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 20)
                 
-                Text(description)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                // Sign Up Form
+                VStack(spacing: 16) {
+                    TextField("Full Name", text: $name)
+                        .textFieldStyle(RoundedTextFieldStyle())
+                    
+                    TextField("Email", text: $email)
+                        .textFieldStyle(RoundedTextFieldStyle())
+                        .keyboardType(.emailAddress)
+                        .autocapitalization(.none)
+                    
+                    SecureField("Password", text: $password)
+                        .textFieldStyle(RoundedTextFieldStyle())
+                    
+                    SecureField("Confirm Password", text: $confirmPassword)
+                        .textFieldStyle(RoundedTextFieldStyle())
+                    
+                    HStack {
+                        Toggle("", isOn: $agreedToTerms)
+                            .labelsHidden()
+                        
+                        Text("I agree to the ")
+                            .font(.caption)
+                        + Text("Terms of Service")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                        + Text(" and ")
+                            .font(.caption)
+                        + Text("Privacy Policy")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                        
+                        Spacer()
+                    }
+                }
+                .padding(.horizontal, 30)
+                
+                // Sign Up Button
+                Button(action: signUp) {
+                    if isLoading {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    } else {
+                        Text("Create Account")
+                            .fontWeight(.semibold)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(12)
+                .disabled(!isFormValid || isLoading)
+                .padding(.horizontal, 30)
+                
+                Spacer()
             }
-            
-            Spacer()
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+            .alert("Error", isPresented: $showingError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
         }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(8)
     }
-}
-
-// MARK: - App Lifecycle Extensions
-extension ContentView {
-    private func handleAppBecomeActive() {
+    
+    private var isFormValid: Bool {
+        !name.isEmpty &&
+        !email.isEmpty &&
+        !password.isEmpty &&
+        password == confirmPassword &&
+        agreedToTerms
+    }
+    
+    private func signUp() {
+        guard password == confirmPassword else {
+            errorMessage = "Passwords don't match"
+            showingError = true
+            return
+        }
+        
+        isLoading = true
+        
+        // In production, this would create an account
         Task {
-            // Check notification authorization status
-            let status = await notificationService.checkAuthorizationStatus()
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
             
-            if status == .authorized {
-                // Update notification settings
-                notificationService.updateNotificationSettings(with: userPreferences)
+            await MainActor.run {
+                dismiss()
             }
-            
-            // Refresh app data
-            await refreshAppData()
         }
     }
 }
 
-// MARK: - Preview Provider
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
-            .environmentObject(AuthenticationManager.shared)
-            .environmentObject(UserPreferencesManager.shared)
-            .environmentObject(NotificationService.shared)
+// MARK: - Text Field Style
+struct RoundedTextFieldStyle: TextFieldStyle {
+    func _body(configuration: TextField<Self._Label>) -> some View {
+        configuration
+            .padding()
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
     }
+}
+
+#Preview {
+    ShopSenseAIApp()
 }
